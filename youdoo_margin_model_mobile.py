@@ -193,15 +193,6 @@ st.sidebar.header("📦 产品套装价格设定")
 def sidebar_price_control(key, label, min_val, max_val):
     st.sidebar.markdown(f"**▸ {label}**")
     price_val = st.sidebar.slider("", min_val, max_val, key=key)
-    c1, c2, c3, c4 = st.sidebar.columns(4)
-    with c1:
-        st.button("➖10", key=f"{key}_m10", on_click=adjust_price, args=(key, -10))
-    with c2:
-        st.button("➖1", key=f"{key}_m1", on_click=adjust_price, args=(key, -1))
-    with c3:
-        st.button("➕1", key=f"{key}_p1", on_click=adjust_price, args=(key, 1))
-    with c4:
-        st.button("➕10", key=f"{key}_p10", on_click=adjust_price, args=(key, 10))
     return price_val
 
 std_guide_price = sidebar_price_control("std_guide", "标准版官方指导价", 1500, 2500)
@@ -355,6 +346,9 @@ avg_channel_cost_per_total = total_channel_cost / total_sales_volume if total_sa
 avg_channel_rate = avg_channel_cost_per_total / avg_price_per * 100 if avg_price_per > 0 else 0
 total_margin_rate = round(total_profit / (total_revenue + total_renew_revenue) * 100, 2) if (total_revenue + total_renew_revenue) > 0 else 0
 
+# Plotly 图表配置：禁用触摸缩放和拖拽
+PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True, "scrollZoom": False, "doubleClick": False}
+
 # ============================================================
 # 4. 主界面 - 手机版展示
 # ============================================================
@@ -388,13 +382,14 @@ with c5:
               f"综合毛利率 {total_margin_rate}%", delta_color=tot_col)
 
 # --- 续费联动说明 ---
-with st.expander("📈 销量-会员续费联动校验"):
-    st.markdown(f"""
-    - 总续费用户基数：**{total_sales_volume:,} 台**（与总销量完全绑定）
-    - 单用户年均续费收入：**¥{round(single_user_year_renew_revenue, 2)}**
-    - {renew_years}年累计续费总收入：**{round(total_renew_revenue/10000, 2)} 万元**
-    - 销量涨10倍 → 续费收入同步涨10倍
-    """)
+st.markdown(f"""
+**📈 销量-会员续费联动校验**
+
+- 总续费用户基数：**{total_sales_volume:,} 台**（与总销量完全绑定）
+- 单用户年均续费收入：**¥{round(single_user_year_renew_revenue, 2)}**
+- {renew_years}年累计续费总收入：**{round(total_renew_revenue/10000, 2)} 万元**
+- 销量涨10倍 → 续费收入同步涨10倍
+""")
 
 st.divider()
 
@@ -412,13 +407,13 @@ with c_p1:
         fig1 = px.pie(names=list(sku_sales_amount.keys()), values=[v/10000 for v in sku_sales_amount.values()],
                       title="销售金额（万元）", hole=0.4)
         fig1.update_layout(height=350, font_size=13, title_font_size=14, margin=dict(t=40, b=10))
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, config=PLOTLY_CONFIG)
 with c_p2:
     if sku_sales_cost:
         fig2 = px.pie(names=list(sku_sales_cost.keys()), values=[v/10000 for v in sku_sales_cost.values()],
                       title="销售成本（万元）", hole=0.4)
         fig2.update_layout(height=350, font_size=13, title_font_size=14, margin=dict(t=40, b=10))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, config=PLOTLY_CONFIG)
 
 # --- 渠道成本明细 ---
 st.divider()
@@ -469,74 +464,74 @@ fig_sankey = go.Figure(go.Sankey(
               color=["#4A90D9", "#E74C3C", "#F39C12", "#27AE60", "#E74C3C", "#E74C3C", "#9B59B6", "#2ECC71", "#9B59B6", "#E74C3C", "#E74C3C", "#2ECC71"]),
     link=dict(source=sankey_source, target=sankey_target, value=sankey_values, color=["rgba(231,76,60,0.3)"]*12)
 ))
-fig_sankey.update_layout(title_text="单台资金流向（单位：元）", font_size=12, height=380)
-st.plotly_chart(fig_sankey, use_container_width=True)
+fig_sankey.update_layout(title_text="单台资金流向（单位：元）", font_size=12, height=380, dragmode=False)
+st.plotly_chart(fig_sankey, use_container_width=True, config=PLOTLY_CONFIG)
 
-# --- 敏感性分析：可折叠 ---
+# --- 敏感性分析 ---
 st.divider()
-with st.expander("📈 敏感性分析（硬件成本 × 销量 对毛利的影响）"):
-    hw_range = np.linspace(base_hardware_cost - 100, base_hardware_cost + 100, 6)
-    vol_levels = [50000, 100000, 200000, 300000, 500000]
-    sens_data = []
-    for vol in vol_levels:
-        for hw in hw_range:
-            sky_hw = avg_p_hw_per + avg_s_split_per - hw - avg_c_hw_extra_per - avg_channel_cost_per_total - royalty_fee
-            you_hw = avg_p_sw_per + royalty_fee - avg_s_split_per - avg_c_card_per - avg_c_vip_discount_per
-            renew = vol * single_user_year_renew_revenue * renew_years
-            sky_r = renew * vip_split_rate
-            you_r = renew * (1 - vip_split_rate)
-            sens_data.append({
-                "硬件成本（元）": hw, "销量（台）": vol,
-                "创维总毛利（万元）": (sky_hw * vol + sky_r) / 10000,
-                "创想总毛利（万元）": (you_hw * vol + you_r) / 10000
-            })
-    sens_df = pd.DataFrame(sens_data)
-    colors = px.colors.qualitative.Set2
+st.subheader("📈 敏感性分析（硬件成本 × 销量 对毛利的影响）")
+hw_range = np.linspace(base_hardware_cost - 100, base_hardware_cost + 100, 6)
+vol_levels = [50000, 100000, 200000, 300000, 500000]
+sens_data = []
+for vol in vol_levels:
+    for hw in hw_range:
+        sky_hw = avg_p_hw_per + avg_s_split_per - hw - avg_c_hw_extra_per - avg_channel_cost_per_total - royalty_fee
+        you_hw = avg_p_sw_per + royalty_fee - avg_s_split_per - avg_c_card_per - avg_c_vip_discount_per
+        renew = vol * single_user_year_renew_revenue * renew_years
+        sky_r = renew * vip_split_rate
+        you_r = renew * (1 - vip_split_rate)
+        sens_data.append({
+            "硬件成本（元）": hw, "销量（台）": vol,
+            "创维总毛利（万元）": (sky_hw * vol + sky_r) / 10000,
+            "创想总毛利（万元）": (you_hw * vol + you_r) / 10000
+        })
+sens_df = pd.DataFrame(sens_data)
+colors = px.colors.qualitative.Set2
 
-    fig_s1 = go.Figure()
-    for i, vol in enumerate(vol_levels):
-        sub = sens_df[sens_df["销量（台）"] == vol]
-        fig_s1.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创维总毛利（万元）"],
-                                    name=f"创维-{int(vol/1000)}k",
-                                    line=dict(color=colors[i % len(colors)])))
-    fig_s1.update_layout(title="硬件成本 vs 创维总毛利", xaxis_title="硬件成本（元）",
-                         yaxis_title="创维总毛利（万元）", height=350,
-                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig_s1, use_container_width=True)
+fig_s1 = go.Figure()
+for i, vol in enumerate(vol_levels):
+    sub = sens_df[sens_df["销量（台）"] == vol]
+    fig_s1.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创维总毛利（万元）"],
+                                name=f"创维-{int(vol/1000)}k",
+                                line=dict(color=colors[i % len(colors)])))
+fig_s1.update_layout(title="硬件成本 vs 创维总毛利", xaxis_title="硬件成本（元）",
+                     yaxis_title="创维总毛利（万元）", height=350,
+                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+st.plotly_chart(fig_s1, use_container_width=True, config=PLOTLY_CONFIG)
 
-    fig_s2 = go.Figure()
-    for i, vol in enumerate(vol_levels):
-        sub = sens_df[sens_df["销量（台）"] == vol]
-        fig_s2.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创想总毛利（万元）"],
-                                    name=f"创想-{int(vol/1000)}k",
-                                    line=dict(color=colors[i % len(colors)], dash="dot")))
-    fig_s2.update_layout(title="硬件成本 vs 创想总毛利", xaxis_title="硬件成本（元）",
-                         yaxis_title="创想总毛利（万元）", height=350,
-                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig_s2, use_container_width=True)
+fig_s2 = go.Figure()
+for i, vol in enumerate(vol_levels):
+    sub = sens_df[sens_df["销量（台）"] == vol]
+    fig_s2.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创想总毛利（万元）"],
+                                name=f"创想-{int(vol/1000)}k",
+                                line=dict(color=colors[i % len(colors)], dash="dot")))
+fig_s2.update_layout(title="硬件成本 vs 创想总毛利", xaxis_title="硬件成本（元）",
+                     yaxis_title="创想总毛利（万元）", height=350,
+                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+st.plotly_chart(fig_s2, use_container_width=True, config=PLOTLY_CONFIG)
 
-# --- 财务明细：可折叠 ---
+# --- 财务明细 ---
 st.divider()
-with st.expander("📋 双主体财务明细（创维/创想）"):
-    c_d1, c_d2 = st.columns(2)
-    with c_d1:
-        st.markdown("**创维数字**")
-        sky_df = pd.DataFrame({
-            "项目": ["硬件收入", "会员分成", "续费分成", "硬件成本", "配件成本", "渠道成本", "版权费", "总毛利"],
-            "万元": [round(total_p_hw/10000, 2), round(total_s_split/10000, 2), round(total_skyworth_renew_profit/10000, 2),
-                    round(-total_c_hw_base/10000, 2), round(-total_c_hw_extra/10000, 2),
-                    round(-total_channel_cost/10000, 2), round(-total_r_royalty/10000, 2), round(total_skyworth_profit/10000, 2)]
-        })
-        st.dataframe(sky_df, use_container_width=True, hide_index=True)
-    with c_d2:
-        st.markdown("**创想悦动**")
-        you_df = pd.DataFrame({
-            "项目": ["软件服务", "版权费收入", "续费服务", "会员分成", "卡件成本", "折价成本", "总毛利"],
-            "万元": [round(total_p_sw/10000, 2), round(total_r_royalty/10000, 2), round(total_youduo_renew_profit/10000, 2),
-                    round(-(total_s_split + total_skyworth_renew_profit)/10000, 2),
-                    round(-total_c_card/10000, 2), round(-total_c_vip_discount/10000, 2), round(total_youduo_profit/10000, 2)]
-        })
-        st.dataframe(you_df, use_container_width=True, hide_index=True)
+st.subheader("📋 双主体财务明细（创维/创想）")
+c_d1, c_d2 = st.columns(2)
+with c_d1:
+    st.markdown("**创维数字**")
+    sky_df = pd.DataFrame({
+        "项目": ["硬件收入", "会员分成", "续费分成", "硬件成本", "配件成本", "渠道成本", "版权费", "总毛利"],
+        "万元": [round(total_p_hw/10000, 2), round(total_s_split/10000, 2), round(total_skyworth_renew_profit/10000, 2),
+                round(-total_c_hw_base/10000, 2), round(-total_c_hw_extra/10000, 2),
+                round(-total_channel_cost/10000, 2), round(-total_r_royalty/10000, 2), round(total_skyworth_profit/10000, 2)]
+    })
+    st.dataframe(sky_df, use_container_width=True, hide_index=True)
+with c_d2:
+    st.markdown("**创想悦动**")
+    you_df = pd.DataFrame({
+        "项目": ["软件服务", "版权费收入", "续费服务", "会员分成", "卡件成本", "折价成本", "总毛利"],
+        "万元": [round(total_p_sw/10000, 2), round(total_r_royalty/10000, 2), round(total_youduo_renew_profit/10000, 2),
+                round(-(total_s_split + total_skyworth_renew_profit)/10000, 2),
+                round(-total_c_card/10000, 2), round(-total_c_vip_discount/10000, 2), round(total_youduo_profit/10000, 2)]
+    })
+    st.dataframe(you_df, use_container_width=True, hide_index=True)
 
 # --- 保存方案 ---
 st.divider()
