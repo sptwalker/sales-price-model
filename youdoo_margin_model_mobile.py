@@ -5,9 +5,9 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
 import io
+import os
 import random
 from PIL import Image, ImageDraw, ImageFont
-import os
 
 # ============================================================
 # 页面配置 - 手机版
@@ -596,38 +596,73 @@ st.subheader("💾 保存当前方案")
 
 # 中文兼容字体加载函数（核心修复）
 def load_chinese_font(font_type="regular", font_size=18):
-    # 字体优先级：本地思源黑体 > 系统中文字体 > 默认字体
     font_paths = []
-    
-    # 1. 优先加载项目根目录的思源黑体
     if font_type == "bold":
         font_paths.append("NotoSansSC-Bold.ttf")
     else:
         font_paths.append("Lenovosmallhei.ttf")
-    
-    # 2. Windows系统兼容
-    font_paths.append("C:/Windows/Fonts/msyh.ttc")  # 微软雅黑
-    font_paths.append("C:/Windows/Fonts/simhei.ttf") # 黑体
-    
-    # 3. MacOS系统兼容
-    font_paths.append("/System/Library/Fonts/PingFang.ttc") # 苹方
-    font_paths.append("/System/Library/Fonts/STHeiti Light.ttc") # 华文黑体
-    
-    # 4. Linux/Streamlit Cloud系统兼容
+    font_paths.append("C:/Windows/Fonts/msyh.ttc")
+    font_paths.append("C:/Windows/Fonts/simhei.ttf")
+    font_paths.append("/System/Library/Fonts/PingFang.ttc")
+    font_paths.append("/System/Library/Fonts/STHeiti Light.ttc")
     font_paths.append("/usr/share/fonts/truetype/noto/Lenovosmallhei.ttf")
     font_paths.append("/usr/share/fonts/opentype/noto/Lenovosmallhei.ttf")
-
-    # 循环尝试加载字体
     for font_path in font_paths:
         if os.path.exists(font_path):
             try:
                 return ImageFont.truetype(font_path, font_size)
             except:
                 continue
-    
-    # 全部失败，fallback到默认字体
-    st.warning("⚠️ 未找到中文字体，部分文字可能显示异常，请上传思源黑体字体文件到项目根目录")
     return ImageFont.load_default(size=font_size)
+
+# 文字换行函数
+def wrap_text(text, font, max_width, draw):
+    """将文字拆分为不超过 max_width 宽度的多行"""
+    if not text:
+        return [""]
+    lines = []
+    # 按竖线先拆大片断
+    segments = text.split(" | ")
+    current_line = ""
+    for seg in segments:
+        seg = seg.strip()
+        test_line = current_line + (" | " if current_line else "") + seg
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        test_w = bbox[2] - bbox[0]
+        if test_w <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            # 如果单个seg本身就超宽，按字符继续拆
+            current_line = seg
+            bbox = draw.textbbox((0, 0), current_line, font=font)
+            while bbox[2] - bbox[0] > max_width and len(current_line) > 1:
+                # 从末尾往前砍到刚好塞下
+                current_line = current_line[:-1]
+                bbox = draw.textbbox((0, 0), current_line + "…", font=font)
+                if bbox[2] - bbox[0] <= max_width:
+                    break
+            # 剩余部分重新处理
+            remaining = seg[len(current_line):] if current_line == seg else seg[len(current_line):]
+            while remaining:
+                bbox = draw.textbbox((0, 0), remaining, font=font)
+                if bbox[2] - bbox[0] <= max_width:
+                    current_line = remaining
+                    remaining = ""
+                else:
+                    # 从前往后截
+                    tmp = remaining
+                    while len(tmp) > 1:
+                        bbox = draw.textbbox((0, 0), tmp, font=font)
+                        if bbox[2] - bbox[0] <= max_width:
+                            break
+                        tmp = tmp[:-1]
+                    lines.append(tmp)
+                    remaining = remaining[len(tmp):]
+    if current_line:
+        lines.append(current_line)
+    return lines if lines else [""]
 
 # 图片生成函数
 def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
@@ -673,21 +708,30 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     content_rows.append({"type": "content", "text": f"硬件参数：基础硬件成本 ¥{base_hardware_cost} | 单台版权费 ¥{royalty_fee}", "bg_color": "#F5F5F5"})
     content_rows.append({"type": "content", "text": f"会员参数：会员续费率 {renew_rate}% | 年卡续费占比 {year_card_renew_ratio}% | 创维分成比例 {vip_split_rate_pct}% | 赠送会员折价比例 {vip_discount_rate_pct}%", "bg_color": "#F5F5F5"})
 
-    # 计算图片总高度
-    total_row_height = 0
-    for row in content_rows:
-        total_row_height += title_row_height if row["type"] == "title" else row_height
-    img_height = header_height + total_row_height + footer_height
-
-    # 创建画布
-    image = Image.new("RGB", (img_width, img_height), "white")
-    draw = ImageDraw.Draw(image)
-
-    # 加载中文字体（核心修复）
+    # 加载字体
     font_main_title = load_chinese_font("bold", 24)
     font_title = load_chinese_font("bold", 20)
     font_content = load_chinese_font("regular", 18)
     font_footer = load_chinese_font("regular", 14)
+    max_text_width = img_width - 2 * margin - 30
+
+    # 第一次创建临时画布，用于计算换行后的真实高度
+    temp_img = Image.new("RGB", (img_width, 10000), "white")
+    temp_draw = ImageDraw.Draw(temp_img)
+
+    # 计算每行换行后需要的总高度
+    total_row_height = 0
+    for row in content_rows:
+        if row["type"] == "title":
+            total_row_height += title_row_height
+        else:
+            wrapped = wrap_text(row["text"], font_content, max_text_width, temp_draw)
+            total_row_height += max(len(wrapped) * row_height, row_height)
+    img_height = header_height + total_row_height + footer_height
+
+    # 创建正确高度的画布
+    image = Image.new("RGB", (img_width, img_height), "white")
+    draw = ImageDraw.Draw(image)
 
     # 绘制顶部主标题
     main_title = f"YOUDOO BOX售价测算方案（{scheme_name}版）"
@@ -697,20 +741,29 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     title_h = title_bbox[3] - title_bbox[1]
     draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_main_title, fill="white")
 
-    # 绘制内容行
+    # 绘制内容行（支持换行）
     current_y = header_height
     for row in content_rows:
-        # 行高
-        rh = title_row_height if row["type"] == "title" else row_height
+        font = font_title if row["type"] == "title" else font_content
+        text_color = row.get("text_color", "#000000")
+
+        # 换行处理
+        if row["type"] == "title":
+            wrapped = [row["text"]]
+        else:
+            wrapped = wrap_text(row["text"], font, max_text_width, draw)
+
+        # 每行高度（换行后每行行高）
+        line_h = row_height
+        total_h = len(wrapped) * line_h
+        rh = title_row_height if row["type"] == "title" else max(total_h, line_h)
+
         # 绘制背景
         draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-        # 绘制文字
-        text_color = row.get("text_color", "#000000")
-        font = font_title if row["type"] == "title" else font_content
-        text_bbox = draw.textbbox((0, 0), row["text"], font=font)
-        text_h = text_bbox[3] - text_bbox[1]
-        draw.text((margin + 15, current_y + (rh - text_h)/2), row["text"], font=font, fill=text_color)
-        # 下移
+        # 绘制文字（每行）
+        for i, line in enumerate(wrapped):
+            ly = current_y + i * line_h + (rh - total_h) / 2
+            draw.text((margin + 15, ly), line, font=font, fill=text_color)
         current_y += rh
 
     # 绘制底部备注
