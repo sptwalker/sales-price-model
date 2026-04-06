@@ -372,7 +372,7 @@ PLOTLY_CONFIG = {
 # ============================================================
 # 4. 主界面 - 手机版展示
 # ============================================================
-st.title("🎮 YOUDOO BOX 产品毛利测算模型 V6.6 手机版")
+st.title("🎮 YOUDOO BOX 产品毛利测算模型 V6.7 手机版")
 st.caption("✅ 销量-会员收入-毛利强关联修正 | 硬件/续费毛利拆分展示")
 
 st.divider()
@@ -676,12 +676,19 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
 
     # 构建所有内容行
     content_rows = []
-    # 区块1：预设销售目标
-    content_rows.append({"type": "title", "text": "📊 预设销售目标", "bg_color": "#4A90D9", "text_color": "white"})
+    # 区块1：核心指标
+    content_rows.append({"type": "title", "text": "📊 核心指标", "bg_color": "#4A90D9", "text_color": "white"})
+    # 普通指标行（黑色）
     content_rows.append({"type": "content", "text": f"全渠道总销售额：¥{round(total_revenue/10000, 1)} 万元", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台 | 单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
-    content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元 | 综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content", "text": f"产品总毛利：¥{round(total_profit/10000, 1)} 万元 | 综合毛利率 {total_margin_rate}%", "bg_color": "white"})
+    content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
+    content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元  |  综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
+    # 毛利指标行（带颜色数字）
+    sky_color = "#27AE60" if total_skyworth_profit >= 0 else "#E74C3C"
+    you_color = "#27AE60" if total_youduo_profit >= 0 else "#E74C3C"
+    tot_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+    content_rows.append({"type": "content_mv", "label": "创维数字总毛利", "value": f"¥{round(total_skyworth_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万  续费 {round(total_skyworth_renew_profit/10000, 1)}万", "value_color": sky_color, "bg_color": "white"})
+    content_rows.append({"type": "content_mv", "label": "创想悦动总毛利", "value": f"¥{round(total_youduo_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万  续费 {round(total_youduo_renew_profit/10000, 1)}万", "value_color": you_color, "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content_mv", "label": "产品总毛利", "value": f"¥{round(total_profit/10000, 1)} 万元", "delta": f"综合毛利率 {total_margin_rate}%", "value_color": tot_color, "bg_color": "white"})
     
     # 区块2：各套装定价方案
     content_rows.append({"type": "title", "text": "📦 各套装定价方案", "bg_color": "#27AE60", "text_color": "white"})
@@ -745,6 +752,9 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
             rh = (n_data_rows + 1) * 38
             total_row_height += rh
             table_row_heights.append(rh)
+        elif row["type"] == "content_mv":
+            # 毛利指标行：固定一行高度
+            total_row_height += row_height
         else:
             wrapped = wrap_text(row["text"], font_content, max_text_width, temp_draw)
             total_row_height += max(len(wrapped) * row_height, row_height)
@@ -759,8 +769,7 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     draw.rectangle([0, 0, img_width, header_height], fill="#2C3E50")
     title_bbox = draw.textbbox((0, 0), main_title, font=font_main_title)
     title_w = title_bbox[2] - title_bbox[0]
-    title_h = title_bbox[3] - title_bbox[1]
-    draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_main_title, fill="white")
+    draw.text(((img_width - title_w)/2, 26), main_title, font=font_main_title, fill="white")
 
     # 绘制内容行
     current_y = header_height
@@ -769,11 +778,9 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
         if row["type"] == "title":
             # 绘制标题行
             rh = title_row_height
+            pad_y = 13  # 固定顶部内边距
             draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-            bbox = draw.textbbox((0, 0), row["text"], font=font_title)
-            tw = bbox[2] - bbox[0]
-            th = bbox[3] - bbox[1]
-            draw.text((margin + 15, current_y + (rh - th) / 2), row["text"], font=font_title, fill="white")
+            draw.text((margin + 15, current_y + pad_y), row["text"], font=font_title, fill="white")
             current_y += rh
 
         elif row["type"] == "table":
@@ -781,15 +788,14 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
             num_cols = len(row["headers"])
             col_w = (img_width - 2 * margin) / num_cols
             row_h = 38
-            cell_pad_x = 8   # 单元格内左右边距
-            cell_pad_y = 9   # 单元格内上下边距（控制垂直居中）
+            cell_pad_x = 8
+            cell_pad_y = 9
 
             # 表头行
             rh = row_h
             draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["header_bg"])
             for ci, hdr in enumerate(row["headers"]):
                 cx = margin + ci * col_w
-                # 水平居中
                 bbox = draw.textbbox((0, 0), hdr, font=font_content)
                 tw = bbox[2] - bbox[0]
                 tx = cx + (col_w - tw) / 2
@@ -810,6 +816,41 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
                     draw.text((tx, ty), str(val), font=font_content, fill="#333333")
                 current_y += row_h
 
+        elif row["type"] == "content_mv":
+            # 毛利指标行：左侧标签 + 中间彩色数值 + 右侧小字
+            rh = row_height
+            pad_y = 14  # 文字顶部边距（稍大一些，往下调）
+            label_text = row["label"]
+            value_text = row["value"]
+            delta_text = row.get("delta", "")
+            value_color = row.get("value_color", "#000000")
+            content_w = img_width - 2 * margin - 30  # 可用宽度
+
+            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
+
+            # 标签（左侧，黑色）
+            draw.text((margin + 15, current_y + pad_y), label_text, font=font_content, fill="#000000")
+
+            # 数值（中间彩色加粗）
+            label_bbox = draw.textbbox((0, 0), label_text, font=font_content)
+            label_w = label_bbox[2] - label_bbox[0]
+            value_bbox = draw.textbbox((0, 0), value_text, font=font_content)
+            value_w = value_bbox[2] - value_bbox[0]
+            # 居中位置
+            total_mv_w = label_w + 20 + value_w + 20
+            if delta_text:
+                delta_bbox = draw.textbbox((0, 0), delta_text, font=font_content)
+                total_mv_w += delta_bbox[2] - delta_bbox[0] + 20
+            start_x = margin + 15
+            value_x = start_x + label_w + 20
+            draw.text((value_x, current_y + pad_y), value_text, font=font_content, fill=value_color)
+            # 小字（右侧，黑色）
+            if delta_text:
+                delta_x = value_x + value_w + 20
+                draw.text((delta_x, current_y + pad_y), delta_text, font=font_content, fill="#555555")
+
+            current_y += rh
+
         else:
             # 普通内容行
             font = font_content
@@ -818,19 +859,19 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
             line_h = row_height
             total_h = len(wrapped) * line_h
             rh = max(total_h, line_h)
+            pad_y = 13  # 固定顶部内边距（稍大，往下调）
             draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
             for i, line in enumerate(wrapped):
-                ly = current_y + i * line_h + (rh - total_h) / 2
+                ly = current_y + i * line_h + pad_y
                 draw.text((margin + 15, ly), line, font=font, fill=text_color)
             current_y += rh
 
     # 绘制底部备注
-    footer_text = f"生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
+    footer_text = f"YOUDOO BOX 毛利测算模型 V6.7 | 生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
     draw.rectangle([0, current_y, img_width, current_y + footer_height], fill="#F5F5F5")
     footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
     footer_w = footer_bbox[2] - footer_bbox[0]
-    footer_h = footer_bbox[3] - footer_bbox[1]
-    draw.text(((img_width - footer_w)/2, current_y + (footer_height - footer_h)/2), footer_text, font=font_footer, fill="#666666")
+    draw.text(((img_width - footer_w)/2, current_y + 20), footer_text, font=font_footer, fill="#666666")
 
     # 转字节流
     img_byte_arr = io.BytesIO()
