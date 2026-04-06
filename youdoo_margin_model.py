@@ -311,7 +311,7 @@ st.sidebar.caption("赠送会员到期后，用户主动续费的收入计算")
 col_vip1, col_vip2 = st.sidebar.columns(2)
 with col_vip1:
     renew_vip_year_price = st.slider("续费年卡价格（元）", 200, 500, 358)
-    renew_rate = st.slider("会员续费率（%）", 10, 90, 25, format="%d%%")
+    renew_rate = st.slider("会员续费率（%）", 10, 90, 60, format="%d%%")
     renew_years = 1
 with col_vip2:
     renew_vip_month_price = st.slider("续费月卡价格（元）", 20, 80, 49)
@@ -715,27 +715,28 @@ sensitivity_df = pd.DataFrame(sensitivity_data)
 # 双变量敏感性折线图（强化销量关联）
 col_chart1, col_chart2 = st.columns(2)
 with col_chart1:
-    st.subheader("1. 销量-毛利线性关联图")
-    st.caption("X轴：总销量 | 不同颜色：不同硬件成本 | Y轴：总毛利")
+    st.subheader("1. 硬件成本-毛利线性关联图")
+    st.caption("X轴：硬件成本 | 不同颜色：不同销量 | 左Y轴：创维总毛利 | 右Y轴：创想总毛利")
     fig_line = go.Figure()
     colors = px.colors.qualitative.D3
-    for i, hw_cost in enumerate(hw_cost_range):
-        df_sub = sensitivity_df[sensitivity_df["硬件成本（元）"] == hw_cost]
+    for i, vol in enumerate(volume_levels):
+        df_sub = sensitivity_df[sensitivity_df["销量（台）"] == vol]
         fig_line.add_trace(go.Scatter(
-            x=df_sub["销量（台）"], y=df_sub["创维总毛利（万元）"],
-            name=f"创维-硬件成本{hw_cost}元",
-            line=dict(color=colors[i], dash="solid"),
+            x=df_sub["硬件成本（元）"], y=df_sub["创维总毛利（万元）"],
+            name=f"创维-销量{vol}台",
+            line=dict(color=colors[i % len(colors)], dash="solid"),
             yaxis="y"
         ))
         fig_line.add_trace(go.Scatter(
-            x=df_sub["销量（台）"], y=df_sub["创想总毛利（万元）"],
-            name=f"创想-硬件成本{hw_cost}元",
-            line=dict(color=colors[i], dash="dot"),
-            yaxis="y"
+            x=df_sub["硬件成本（元）"], y=df_sub["创想总毛利（万元）"],
+            name=f"创想-销量{vol}台",
+            line=dict(color=colors[i % len(colors)], dash="dot"),
+            yaxis="y2"
         ))
     fig_line.update_layout(
-        xaxis_title="总销量（台）",
-        yaxis_title="总毛利（万元）",
+        xaxis_title="硬件成本（元）",
+        yaxis_title="创维总毛利（万元）",
+        yaxis2=dict(title="创想总毛利（万元）", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500
     )
@@ -779,3 +780,166 @@ with col_chart3:
         height=500
     )
     st.plotly_chart(fig_contour_youduo, use_container_width=True)
+
+# -------------------------- 5. 保存方案功能 --------------------------
+st.divider()
+col_save, _ = st.columns([1, 5])
+with col_save:
+    if st.button("💾 保存当前方案", type="primary"):
+        st.session_state["show_plan_report"] = True
+
+if st.session_state.get("show_plan_report", False):
+    from datetime import datetime
+    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 构建方案报告HTML
+    def build_plan_html():
+        # 套装价格表
+        price_table = f"""
+        <table style="width:100%;border-collapse:collapse;margin-bottom:15px;">
+            <tr style="background:#1f77b4;color:white;">
+                <th style="padding:8px;border:1px solid #ddd;">SKU</th>
+                <th style="padding:8px;border:1px solid #ddd;">官方指导价（元）</th>
+                <th style="padding:8px;border:1px solid #ddd;">大促价（元）</th>
+            </tr>
+            <tr><td style="padding:6px;border:1px solid #ddd;">标准版</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{std_guide_price}</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{std_promo_price}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #ddd;">家庭版</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{fam_guide_price}</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{fam_promo_price}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #ddd;">豪华版</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{lux_guide_price}</td><td style="text-align:center;padding:6px;border:1px solid #ddd;">{lux_promo_price}</td></tr>
+        </table>"""
+        
+        # 赠品配置表
+        gift_rows = ""
+        for sku_name in sku_list:
+            sc = sku_base_config[sku_name]
+            gift_rows += f"""
+            <tr>
+                <td style="padding:6px;border:1px solid #ddd;font-weight:bold;">{sku_name}</td>
+                <td style="text-align:center;padding:6px;border:1px solid #ddd;">{sc['default_extra_remote']}</td>
+                <td style="text-align:center;padding:6px;border:1px solid #ddd;">{sc['default_light_gun']}</td>
+                <td style="text-align:center;padding:6px;border:1px solid #ddd;">月卡×{sc['default_vip_month']} / 年卡×{sc['default_vip_year']}</td>
+                <td style="text-align:center;padding:6px;border:1px solid #ddd;">{sc['default_parent_card']}</td>
+                <td style="text-align:center;padding:6px;border:1px solid #ddd;">全套×{sc['default_nfc_full']} / SSR×{sc['default_nfc_ssr']}</td>
+            </tr>"""
+        gift_table = f"""
+        <table style="width:100%;border-collapse:collapse;margin-bottom:15px;">
+            <tr style="background:#ff7f0e;color:white;">
+                <th style="padding:8px;border:1px solid #ddd;">SKU版本</th>
+                <th style="padding:8px;border:1px solid #ddd;">额外遥控器</th>
+                <th style="padding:8px;border:1px solid #ddd;">光枪</th>
+                <th style="padding:8px;border:1px solid #ddd;">VIP卡</th>
+                <th style="padding:8px;border:1px solid #ddd;">家长钥匙卡</th>
+                <th style="padding:8px;border:1px solid #ddd;">NFC卡</th>
+            </tr>
+            {gift_rows}
+        </table>"""
+        
+        # 渠道成本费率表
+        ch_rate_rows = ""
+        for ch in all_channel:
+            ch_rate_rows += f"<tr><td style='padding:6px;border:1px solid #ddd;'>{ch}</td><td style='text-align:center;padding:6px;border:1px solid #ddd;'>{channel_rate_config[ch]}%</td><td style='text-align:center;padding:6px;border:1px solid #ddd;'>{channel_volume_dict[ch]:,}台</td></tr>"
+        ch_rate_table = f"""
+        <table style="width:100%;border-collapse:collapse;margin-bottom:15px;">
+            <tr style="background:#2ca02c;color:white;">
+                <th style='padding:8px;border:1px solid #ddd;'>渠道</th>
+                <th style='padding:8px;border:1px solid #ddd;'>当前阶段费率({use_channel_stage})</th>
+                <th style='padding:8px;border:1px solid #ddd;'>销量</th>
+            </tr>
+            {ch_rate_rows}
+        </table>"""
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Microsoft YaHei', sans-serif; padding: 30px; max-width: 1100px; margin: 0 auto; background: #fff; color: #333; }}
+            h1 {{ text-align: center; color: #1f77b4; border-bottom: 3px solid #1f77b4; padding-bottom: 10px; }}
+            .time {{ text-align: center; color: #888; margin-bottom: 20px; }}
+            h2 {{ background: linear-gradient(90deg,#1f77b422,transparent); padding-left:10px; border-left:4px solid #1f77b4; color:#1f77b4; }}
+            h3 {{ color:#555; margin-top:20px; border-bottom:1px solid #eee; }}
+            .metric-row {{ display:flex; justify-content:space-around; flex-wrap:wrap; gap:10px; margin-bottom:20px; }}
+            .metric-card {{ background:#f8f9fa; border-radius:8px; padding:12px 20px; text-align:center; min-width:150px; border:1px solid #e0e0e0; }}
+            .metric-card .label {{ font-size:13px; color:#666; }}
+            .metric-card .value {{ font-size:22px; font-weight:bold; margin:5px 0; }}
+            .metric-card .sub {{ font-size:11px; color:#999; }}
+            .green {{ color:#27ae60; }} .red {{ color:#e74c3c; }}
+            table {{ font-size:14px; }}
+            th, td {{ text-align:left; }}
+            .param-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; }}
+            .param-item {{ display:flex; justify-content:space-between; padding:6px 10px; background:#fafafa; border-radius:4px; border-left:3px solid #ff7f0e; font-size:14px; }}
+            .param-name {{ color:#555; }} .param-val {{ font-weight:bold; color:#333; }}
+        </style>
+        </head>
+        <body>
+            <h1>🎮 YOUDOO BOX 毛利测算方案报告</h1>
+            <p class='time'>⏰ 方案生成时间：{now} | 当前售价模式：{price_mode} | 渠道成本阶段：{use_channel_stage}</p>
+            
+            <!-- 核心指标 -->
+            <h2>一、核心指标汇总</h2>
+            <div class='metric-row'>
+                <div class='metric-card'><div class='label'>总销量</div><div class='value'>{total_sales_volume:,}台</div><div class='sub'>均价 {round(avg_price_per,2)}元</div></div>
+                <div class='metric-card'><div class='label'>渠道总成本</div><div class='value'>{round(total_channel_cost/10000,2)}万</div><div class='sub'>单台 {round(avg_channel_cost_per,2)}元</div></div>
+                <div class='metric-card'><div class='label' class='green'>创维数字总毛利</div><div class='value {'green' if total_skyworth_profit>=0 else 'red'}'>{round(total_skyworth_profit/10000,2)}万元</div><div class='sub'>硬件:{round(total_skyworth_hardware_profit/10000,2)}万 续费:{round(total_skyworth_renew_profit/10000,2)}万</div></div>
+                <div class='metric-card'><div class='label'>创想悦动总毛利</div><div class='value {'green' if total_youduo_profit>=0 else 'red'}'>{round(total_youduo_profit/10000,2)}万元</div><div class='sub'>硬件:{round(total_youduo_hardware_profit/10000,2)}万 续费:{round(total_youduo_renew_profit/10000,2)}万</div></div>
+                <div class='metric-card'><div class='label'>产品总毛利</div><div class='value {'green' if total_profit>=0 else 'red'}'>{round(total_profit/10000,2)}万元</div><div class='sub'>毛利率 {total_margin_rate}%</div></div>
+            </div>
+            
+            <!-- 套装价格表 -->
+            <h2>二、套装价格配置</h2>
+            {price_table}
+            
+            <!-- 赠品配置表 -->
+            <h3>各套装赠品/配件配置</h3>
+            {gift_table}
+            
+            <!-- 渠道销量与成本 -->
+            <h2>三、渠道销量占比</h2>
+            {ch_rate_table}
+            
+            <!-- SKU销量占比 -->
+            <h3>SKU销量占比</h3>
+            <div style='display:flex;gap:20px;margin-bottom:15px;font-size:14px;'>
+                <div style='flex:1;background:#f0f8ff;padding:10px;border-radius:6px;'>
+                    <strong>线上渠道：</strong>标准版占{online_standard_ratio}% ({online_standard_volume:,}台) / 家庭版占{online_family_ratio}% ({online_family_volume:,}台)
+                </div>
+                <div style='flex:1;background:#fff8f0;padding:10px;border-radius:6px;'>
+                    <strong>线下渠道：</strong>家庭版占{offline_family_ratio}% ({offline_family_volume:,}台) / 豪华版占{offline_luxury_ratio}% ({offline_luxury_volume:,}台)
+                </div>
+            </div>
+            
+            <!-- 主要参数汇总 -->
+            <h2>四、主要参数设置</h2>
+            <div class='param-grid'>
+                <div class='param-item'><span class='param-name'>基础硬件成本</span><span class='param-val'>{base_hardware_cost} 元</span></div>
+                <div class='param-item'><span class='param-name'>单台版权费(创维→创想)</span><span class='param-val'>{royalty_fee} 元</span></div>
+                <div class='param-item'><span class='param-name'>会员续费率</span><span class='param-val'>{renew_rate}%</span></div>
+                <div class='param-item'><span class='param-name'>续费年卡价格</span><span class='param-val'>{renew_vip_year_price} 元</span></div>
+                <div class='param-item'><span class='param-name'>续费月卡价格</span><span class='param-val'>{renew_vip_month_price} 元</span></div>
+                <div class='param-item'><span class='param-name'>年卡续费占比</span><span class='param-val'>{year_card_renew_ratio}%</span></div>
+                <div class='param-item'><span class='param-name'>会员收入创维分成比例</span><span class='param-val'>{vip_split_rate_pct}%</span></div>
+                <div class='param-item'><span class='param-name'>赠送会员折价计提比例</span><span class='param-val'>{vip_discount_rate_pct}%</span></div>
+                <div class='param-item'><span class='param-name'>单用户年均续费收入</span><span class='param-val'>{round(single_user_year_renew_revenue,2)} 元</span></div>
+                <div class='param-item'><span class='param-name'>续费计算年限</span><span class='param-val'>{renew_years} 年</span></div>
+            </div>
+            
+            <p style='text-align:center;color:#aaa;margin-top:40px;font-size:12px;'>— YOUDOO BOX 毛利测算财务模型 V6.4 自动生成 —</p>
+        </body>
+        </html>
+        """
+        return html
+    
+    plan_html = build_plan_html()
+    
+    # 显示预览
+    st.subheader("📋 方案预览")
+    st.components.v1.html(plan_html, height=900, scrolling=True)
+    
+    # 提供HTML下载
+    st.download_button(
+        label="📥 下载方案报告(HTML)",
+        data=plan_html,
+        file_name=f"YOUDOO_方案_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+        mime="text/html"
+    )
