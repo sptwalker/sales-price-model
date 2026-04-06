@@ -388,19 +388,16 @@ with c2:
 
 c3, c4 = st.columns(2)
 with c3:
-    sky_col = "normal" if total_skyworth_profit >= 0 else "inverse"
-    st.metric("🎯 创维数字总毛利", f"{round(total_skyworth_profit/10000, 1)} 万元",
-              f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万 | 续费 {round(total_skyworth_renew_profit/10000, 1)}万", delta_color=sky_col)
+    st.metric("创维数字总毛利", f"{round(total_skyworth_profit/10000, 1)} 万元",
+              f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万 | 续费 {round(total_skyworth_renew_profit/10000, 1)}万")
 with c4:
-    you_col = "normal" if total_youduo_profit >= 0 else "inverse"
-    st.metric("🎯 创想悦动总毛利", f"{round(total_youduo_profit/10000, 1)} 万元",
-              f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万 | 续费 {round(total_youduo_renew_profit/10000, 1)}万", delta_color=you_col)
+    st.metric("创想悦动总毛利", f"{round(total_youduo_profit/10000, 1)} 万元",
+              f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万 | 续费 {round(total_youduo_renew_profit/10000, 1)}万")
 
 c5, _ = st.columns([1, 2])
 with c5:
-    tot_col = "normal" if total_profit >= 0 else "inverse"
-    st.metric("💎 产品总毛利", f"{round(total_profit/10000, 1)} 万元",
-              f"综合毛利率 {total_margin_rate}%", delta_color=tot_col)
+    st.metric("产品总毛利", f"{round(total_profit/10000, 1)} 万元",
+              f"综合毛利率 {total_margin_rate}%")
 
 # --- 续费联动说明 ---
 st.markdown(f"""
@@ -683,9 +680,9 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
     content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元  |  综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
     # 毛利指标行（带颜色数字）
-    sky_color = "#27AE60" if total_skyworth_profit >= 0 else "#E74C3C"
-    you_color = "#27AE60" if total_youduo_profit >= 0 else "#E74C3C"
-    tot_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+    sky_color = "green" if total_skyworth_profit >= 0 else "red"
+    you_color = "green" if total_youduo_profit >= 0 else "red"
+    tot_color = "green" if total_profit >= 0 else "red"
     content_rows.append({"type": "content_mv", "label": "创维数字总毛利", "value": f"¥{round(total_skyworth_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万  续费 {round(total_skyworth_renew_profit/10000, 1)}万", "value_color": sky_color, "bg_color": "white"})
     content_rows.append({"type": "content_mv", "label": "创想悦动总毛利", "value": f"¥{round(total_youduo_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万  续费 {round(total_youduo_renew_profit/10000, 1)}万", "value_color": you_color, "bg_color": "#F0F8FF"})
     content_rows.append({"type": "content_mv", "label": "产品总毛利", "value": f"¥{round(total_profit/10000, 1)} 万元", "delta": f"综合毛利率 {total_margin_rate}%", "value_color": tot_color, "bg_color": "white"})
