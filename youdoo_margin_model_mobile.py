@@ -689,13 +689,27 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     content_rows.append({"type": "content", "text": f"家庭版：官方指导价 ¥{fam_guide_price} | 大促价 ¥{fam_promo_price}", "bg_color": "white"})
     content_rows.append({"type": "content", "text": f"豪华版：官方指导价 ¥{lux_guide_price} | 大促价 ¥{lux_promo_price}", "bg_color": "#F0F8FF"})
     
-    # 区块3：各SKU详细配置方案
+    # 区块3：各SKU详细配置方案（表格形式）
     content_rows.append({"type": "title", "text": "🎁 各SKU详细配置方案", "bg_color": "#F39C12", "text_color": "white"})
-    for sku_name in sku_list:
-        sc = sku_base_config[sku_name]
-        config_text = f"{sku_name}：遥控×{sc['default_extra_remote']} | 光枪×{sc['default_light_gun']} | 月卡×{sc['default_vip_month']}/年卡×{sc['default_vip_year']} | 家长卡×{sc['default_parent_card']} | NFC全套×{sc['default_nfc_full']}/SSR×{sc['default_nfc_ssr']}"
-        bg = "#F0F8FF" if sku_name == "标准版" else ("white" if sku_name == "家庭版" else "#F0F8FF")
-        content_rows.append({"type": "content", "text": config_text, "bg_color": bg})
+    # 表格头
+    content_rows.append({
+        "type": "table",
+        "headers": ["SKU", "遥控器", "光枪", "VIP月卡", "VIP年卡", "家长卡", "NFC全套", "NFC SSR"],
+        "rows": [
+            [sku_name] + [
+                str(sku_base_config[sku_name]["default_extra_remote"]),
+                str(sku_base_config[sku_name]["default_light_gun"]),
+                str(sku_base_config[sku_name]["default_vip_month"]),
+                str(sku_base_config[sku_name]["default_vip_year"]),
+                str(sku_base_config[sku_name]["default_parent_card"]),
+                str(sku_base_config[sku_name]["default_nfc_full"]),
+                str(sku_base_config[sku_name]["default_nfc_ssr"]),
+            ]
+            for sku_name in sku_list
+        ],
+        "bg_color": "#FFFFFF",
+        "header_bg": "#F39C12",
+    })
     
     # 区块4：会员价格方案
     content_rows.append({"type": "title", "text": "📋 会员价格方案", "bg_color": "#9B59B6", "text_color": "white"})
@@ -721,9 +735,16 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
 
     # 计算每行换行后需要的总高度
     total_row_height = 0
+    table_row_heights = []  # 记录每张表每行高度
     for row in content_rows:
         if row["type"] == "title":
             total_row_height += title_row_height
+        elif row["type"] == "table":
+            # 表格：1行表头 + N行数据，每行高38px
+            n_data_rows = len(row["rows"])
+            rh = (n_data_rows + 1) * 38
+            total_row_height += rh
+            table_row_heights.append(rh)
         else:
             wrapped = wrap_text(row["text"], font_content, max_text_width, temp_draw)
             total_row_height += max(len(wrapped) * row_height, row_height)
@@ -741,30 +762,62 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     title_h = title_bbox[3] - title_bbox[1]
     draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_main_title, fill="white")
 
-    # 绘制内容行（支持换行）
+    # 绘制内容行
     current_y = header_height
+    table_idx = 0
     for row in content_rows:
-        font = font_title if row["type"] == "title" else font_content
-        text_color = row.get("text_color", "#000000")
-
-        # 换行处理
         if row["type"] == "title":
-            wrapped = [row["text"]]
+            # 绘制标题行
+            rh = title_row_height
+            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
+            bbox = draw.textbbox((0, 0), row["text"], font=font_title)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            draw.text((margin + 15, current_y + (rh - th) / 2), row["text"], font=font_title, fill="white")
+            current_y += rh
+
+        elif row["type"] == "table":
+            # 绘制表格
+            num_cols = len(row["headers"])
+            col_widths = [(img_width - 2 * margin) / num_cols] * num_cols
+            row_h = 38
+
+            # 表头行
+            rh = row_h
+            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["header_bg"])
+            for ci, hdr in enumerate(row["headers"]):
+                cx = margin + ci * col_widths[ci]
+                bbox = draw.textbbox((0, 0), hdr, font=font_content)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                draw.text((cx + (col_widths[ci] - tw) / 2, current_y + (rh - th) / 2), hdr, font=font_content, fill="white")
+            current_y += rh
+
+            # 数据行
+            for ri, data_row in enumerate(row["rows"]):
+                bg = "#FFF8E8" if ri % 2 == 0 else "#FFFFFF"
+                draw.rectangle([margin, current_y, img_width - margin, current_y + row_h], fill=bg)
+                for ci, val in enumerate(data_row):
+                    cx = margin + ci * col_widths[ci]
+                    bbox = draw.textbbox((0, 0), str(val), font=font_content)
+                    tw = bbox[2] - bbox[0]
+                    th = bbox[3] - bbox[1]
+                    draw.text((cx + (col_widths[ci] - tw) / 2, current_y + (row_h - th) / 2), str(val), font=font_content, fill="#333333")
+                current_y += row_h
+
         else:
+            # 普通内容行
+            font = font_content
+            text_color = "#000000"
             wrapped = wrap_text(row["text"], font, max_text_width, draw)
-
-        # 每行高度（换行后每行行高）
-        line_h = row_height
-        total_h = len(wrapped) * line_h
-        rh = title_row_height if row["type"] == "title" else max(total_h, line_h)
-
-        # 绘制背景
-        draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-        # 绘制文字（每行）
-        for i, line in enumerate(wrapped):
-            ly = current_y + i * line_h + (rh - total_h) / 2
-            draw.text((margin + 15, ly), line, font=font, fill=text_color)
-        current_y += rh
+            line_h = row_height
+            total_h = len(wrapped) * line_h
+            rh = max(total_h, line_h)
+            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
+            for i, line in enumerate(wrapped):
+                ly = current_y + i * line_h + (rh - total_h) / 2
+                draw.text((margin + 15, ly), line, font=font, fill=text_color)
+            current_y += rh
 
     # 绘制底部备注
     footer_text = f"生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
