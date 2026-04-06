@@ -600,7 +600,7 @@ if st.button("📥 生成方案信息图", type="primary", use_container_width=T
 
         # 渠道参数行
         ch_rows = ""
-        for ch in all_channel:
+        for ch in all_ch:
             ch_rows += f"<tr><td>{ch}</td><td>{channel_rate_config[ch]}%</td><td>{channel_volume_dict[ch]:,}台</td></tr>"
 
         html = f"""<!DOCTYPE html>
