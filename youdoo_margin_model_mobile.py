@@ -5,9 +5,6 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
 import io
-import os
-import random
-from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
 # 页面配置 - 手机版
@@ -585,316 +582,121 @@ with c_d2:
     })
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
+
 # ============================================================
-# 【中文乱码修复版】纯静态PNG方案信息图生成
+# 保存方案：HTML 报告（颜色精准，兼容所有平台）
 # ============================================================
 st.divider()
 st.subheader("💾 保存当前方案")
 
-# 中文兼容字体加载函数（核心修复）
-def load_chinese_font(font_type="regular", font_size=18):
-    font_paths = []
-    if font_type == "bold":
-        font_paths.append("NotoSansSC-Bold.ttf")
-    else:
-        font_paths.append("Lenovosmallhei.ttf")
-    font_paths.append("C:/Windows/Fonts/msyh.ttc")
-    font_paths.append("C:/Windows/Fonts/simhei.ttf")
-    font_paths.append("/System/Library/Fonts/PingFang.ttc")
-    font_paths.append("/System/Library/Fonts/STHeiti Light.ttc")
-    font_paths.append("/usr/share/fonts/truetype/noto/Lenovosmallhei.ttf")
-    font_paths.append("/usr/share/fonts/opentype/noto/Lenovosmallhei.ttf")
-    for font_path in font_paths:
-        if os.path.exists(font_path):
-            try:
-                return ImageFont.truetype(font_path, font_size)
-            except:
-                continue
-    return ImageFont.load_default(size=font_size)
-
-# 文字换行函数
-def wrap_text(text, font, max_width, draw):
-    """将文字拆分为不超过 max_width 宽度的多行"""
-    if not text:
-        return [""]
-    lines = []
-    # 按竖线先拆大片断
-    segments = text.split(" | ")
-    current_line = ""
-    for seg in segments:
-        seg = seg.strip()
-        test_line = current_line + (" | " if current_line else "") + seg
-        bbox = draw.textbbox((0, 0), test_line, font=font)
-        test_w = bbox[2] - bbox[0]
-        if test_w <= max_width:
-            current_line = test_line
-        else:
-            if current_line:
-                lines.append(current_line)
-            # 如果单个seg本身就超宽，按字符继续拆
-            current_line = seg
-            bbox = draw.textbbox((0, 0), current_line, font=font)
-            while bbox[2] - bbox[0] > max_width and len(current_line) > 1:
-                # 从末尾往前砍到刚好塞下
-                current_line = current_line[:-1]
-                bbox = draw.textbbox((0, 0), current_line + "…", font=font)
-                if bbox[2] - bbox[0] <= max_width:
-                    break
-            # 剩余部分重新处理
-            remaining = seg[len(current_line):] if current_line == seg else seg[len(current_line):]
-            while remaining:
-                bbox = draw.textbbox((0, 0), remaining, font=font)
-                if bbox[2] - bbox[0] <= max_width:
-                    current_line = remaining
-                    remaining = ""
-                else:
-                    # 从前往后截
-                    tmp = remaining
-                    while len(tmp) > 1:
-                        bbox = draw.textbbox((0, 0), tmp, font=font)
-                        if bbox[2] - bbox[0] <= max_width:
-                            break
-                        tmp = tmp[:-1]
-                    lines.append(tmp)
-                    remaining = remaining[len(tmp):]
-    if current_line:
-        lines.append(current_line)
-    return lines if lines else [""]
-
-# 图片生成函数
-def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
-    # 图片基础配置
-    img_width = 720  # 手机竖屏宽度
-    row_height = 40   # 每行高度
-    title_row_height = 50  # 区块标题行高度
-    header_height = 80  # 顶部主标题高度
-    footer_height = 60  # 底部备注高度
-    margin = 40  # 左右边距
-
-    # 构建所有内容行
-    content_rows = []
-    # 区块1：核心指标
-    content_rows.append({"type": "title", "text": "📊 核心指标", "bg_color": "#4A90D9", "text_color": "white"})
-    # 普通指标行（黑色）
-    content_rows.append({"type": "content", "text": f"全渠道总销售额：¥{round(total_revenue/10000, 1)} 万元", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
-    content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元  |  综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
-    # 毛利指标行（带颜色数字）
-    sky_color = "#009944" if total_skyworth_profit >= 0 else "#C83232"
-    you_color = "#009944" if total_youduo_profit >= 0 else "#C83232"
-    tot_color = "#009944" if total_profit >= 0 else "#C83232"
-    content_rows.append({"type": "content_mv", "label": "创维数字总毛利", "value": f"¥{round(total_skyworth_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万  续费 {round(total_skyworth_renew_profit/10000, 1)}万", "value_color": sky_color, "delta_color": "#555555", "bg_color": "white"})
-    content_rows.append({"type": "content_mv", "label": "创想悦动总毛利", "value": f"¥{round(total_youduo_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万  续费 {round(total_youduo_renew_profit/10000, 1)}万", "value_color": you_color, "delta_color": "#555555", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content_mv", "label": "产品总毛利", "value": f"¥{round(total_profit/10000, 1)} 万元", "delta": f"综合毛利率 {total_margin_rate}%", "value_color": tot_color, "delta_color": "#555555", "bg_color": "white"})
-    
-    # 区块2：各套装定价方案
-    content_rows.append({"type": "title", "text": "📦 各套装定价方案", "bg_color": "#27AE60", "text_color": "white"})
-    content_rows.append({"type": "content", "text": f"标准版：官方指导价 ¥{std_guide_price} | 大促价 ¥{std_promo_price}", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content", "text": f"家庭版：官方指导价 ¥{fam_guide_price} | 大促价 ¥{fam_promo_price}", "bg_color": "white"})
-    content_rows.append({"type": "content", "text": f"豪华版：官方指导价 ¥{lux_guide_price} | 大促价 ¥{lux_promo_price}", "bg_color": "#F0F8FF"})
-    
-    # 区块3：各SKU详细配置方案（表格形式）
-    content_rows.append({"type": "title", "text": "🎁 各SKU详细配置方案", "bg_color": "#F39C12", "text_color": "white"})
-    # 表格头
-    content_rows.append({
-        "type": "table",
-        "headers": ["SKU", "遥控器", "光枪", "VIP月卡", "VIP年卡", "家长卡", "NFC全套", "NFC SSR"],
-        "rows": [
-            [sku_name] + [
-                str(sku_base_config[sku_name]["default_extra_remote"]),
-                str(sku_base_config[sku_name]["default_light_gun"]),
-                str(sku_base_config[sku_name]["default_vip_month"]),
-                str(sku_base_config[sku_name]["default_vip_year"]),
-                str(sku_base_config[sku_name]["default_parent_card"]),
-                str(sku_base_config[sku_name]["default_nfc_full"]),
-                str(sku_base_config[sku_name]["default_nfc_ssr"]),
-            ]
-            for sku_name in sku_list
-        ],
-        "bg_color": "#FFFFFF",
-        "header_bg": "#F39C12",
-    })
-    
-    # 区块4：会员价格方案
-    content_rows.append({"type": "title", "text": "📋 会员价格方案", "bg_color": "#9B59B6", "text_color": "white"})
-    content_rows.append({"type": "content", "text": f"会员年卡价格：¥{renew_vip_year_price}", "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content", "text": f"会员月卡价格：¥{renew_vip_month_price}", "bg_color": "white"})
-    
-    # 区块5：详细销售参数设定
-    content_rows.append({"type": "title", "text": "🔍 详细销售参数设定", "bg_color": "#888888", "text_color": "white"})
-    content_rows.append({"type": "content", "text": f"渠道参数：京东 {channel_rate_config['京东']}%/{channel_volume_dict['京东']:,}台 | 天猫 {channel_rate_config['天猫']}%/{channel_volume_dict['天猫']:,}台 | 抖音 {channel_rate_config['抖音']}%/{channel_volume_dict['抖音']:,}台 | 线下 {channel_rate_config['线下']}%/{channel_volume_dict['线下']:,}台", "bg_color": "#F5F5F5"})
-    content_rows.append({"type": "content", "text": f"硬件参数：基础硬件成本 ¥{base_hardware_cost} | 单台版权费 ¥{royalty_fee}", "bg_color": "#F5F5F5"})
-    content_rows.append({"type": "content", "text": f"会员参数：会员续费率 {renew_rate}% | 年卡续费占比 {year_card_renew_ratio}% | 创维分成比例 {vip_split_rate_pct}% | 赠送会员折价比例 {vip_discount_rate_pct}%", "bg_color": "#F5F5F5"})
-
-    # 加载字体
-    font_main_title = load_chinese_font("bold", 24)
-    font_title = load_chinese_font("bold", 20)
-    font_content = load_chinese_font("regular", 18)
-    font_footer = load_chinese_font("regular", 14)
-    max_text_width = img_width - 2 * margin - 30
-
-    # 第一次创建临时画布，用于计算换行后的真实高度
-    temp_img = Image.new("RGB", (img_width, 10000), "white")
-    temp_draw = ImageDraw.Draw(temp_img)
-
-    # 计算每行换行后需要的总高度
-    total_row_height = 0
-    table_row_heights = []  # 记录每张表每行高度
-    for row in content_rows:
-        if row["type"] == "title":
-            total_row_height += title_row_height
-        elif row["type"] == "table":
-            # 表格：1行表头 + N行数据，每行高38px
-            n_data_rows = len(row["rows"])
-            rh = (n_data_rows + 1) * 38
-            total_row_height += rh
-            table_row_heights.append(rh)
-        elif row["type"] == "content_mv":
-            # 毛利指标行：固定一行高度
-            total_row_height += row_height
-        else:
-            wrapped = wrap_text(row["text"], font_content, max_text_width, temp_draw)
-            total_row_height += max(len(wrapped) * row_height, row_height)
-    img_height = header_height + total_row_height + footer_height
-
-    # 创建正确高度的画布
-    image = Image.new("RGB", (img_width, img_height), "white")
-    draw = ImageDraw.Draw(image)
-
-    # 绘制顶部主标题
-    main_title = f"YOUDOO BOX售价测算方案（{scheme_name}版）"
-    draw.rectangle([0, 0, img_width, header_height], fill="#2C3E50")
-    title_bbox = draw.textbbox((0, 0), main_title, font=font_main_title)
-    title_w = title_bbox[2] - title_bbox[0]
-    draw.text(((img_width - title_w)/2, 26), main_title, font=font_main_title, fill="white")
-
-    # 绘制内容行
-    current_y = header_height
-    table_idx = 0
-    for row in content_rows:
-        if row["type"] == "title":
-            # 绘制标题行
-            rh = title_row_height
-            pad_y = 13  # 固定顶部内边距
-            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-            draw.text((margin + 15, current_y + pad_y), row["text"], font=font_title, fill="white")
-            current_y += rh
-
-        elif row["type"] == "table":
-            # 绘制表格
-            num_cols = len(row["headers"])
-            col_w = (img_width - 2 * margin) / num_cols
-            row_h = 38
-            cell_pad_x = 8
-            cell_pad_y = 9
-
-            # 表头行
-            rh = row_h
-            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["header_bg"])
-            for ci, hdr in enumerate(row["headers"]):
-                cx = margin + ci * col_w
-                bbox = draw.textbbox((0, 0), hdr, font=font_content)
-                tw = bbox[2] - bbox[0]
-                tx = cx + (col_w - tw) / 2
-                ty = current_y + cell_pad_y
-                draw.text((tx, ty), hdr, font=font_content, fill="white")
-            current_y += rh
-
-            # 数据行
-            for ri, data_row in enumerate(row["rows"]):
-                bg = "#FFF8E8" if ri % 2 == 0 else "#FFFFFF"
-                draw.rectangle([margin, current_y, img_width - margin, current_y + row_h], fill=bg)
-                for ci, val in enumerate(data_row):
-                    cx = margin + ci * col_w
-                    bbox = draw.textbbox((0, 0), str(val), font=font_content)
-                    tw = bbox[2] - bbox[0]
-                    tx = cx + (col_w - tw) / 2
-                    ty = current_y + cell_pad_y
-                    draw.text((tx, ty), str(val), font=font_content, fill="#333333")
-                current_y += row_h
-
-        elif row["type"] == "content_mv":
-            # 毛利指标行：左侧标签 + 中间彩色数值 + 右侧小字
-            rh = row_height
-            pad_y = 14  # 文字顶部边距（稍大一些，往下调）
-            label_text = row["label"]
-            value_text = row["value"]
-            delta_text = row.get("delta", "")
-            value_color = row.get("value_color", "#000000")
-            delta_color = row.get("delta_color", "#555555")
-            content_w = img_width - 2 * margin - 30  # 可用宽度
-
-            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-
-            # 标签（左侧，黑色）
-            draw.text((margin + 15, current_y + pad_y), label_text, font=font_content, fill="#000000")
-
-            # 数值（中间彩色加粗）
-            label_bbox = draw.textbbox((0, 0), label_text, font=font_content)
-            label_w = label_bbox[2] - label_bbox[0]
-            value_bbox = draw.textbbox((0, 0), value_text, font=font_content)
-            value_w = value_bbox[2] - value_bbox[0]
-            # 居中位置
-            total_mv_w = label_w + 20 + value_w + 20
-            if delta_text:
-                delta_bbox = draw.textbbox((0, 0), delta_text, font=font_content)
-                total_mv_w += delta_bbox[2] - delta_bbox[0] + 20
-            start_x = margin + 15
-            value_x = start_x + label_w + 20
-            draw.text((value_x, current_y + pad_y), value_text, font=font_content, fill=value_color)
-            # 小字（右侧，黑色）
-            if delta_text:
-                delta_x = value_x + value_w + 20
-                draw.text((delta_x, current_y + pad_y), delta_text, font=font_content, fill=delta_color)
-
-            current_y += rh
-
-        else:
-            # 普通内容行
-            font = font_content
-            text_color = "#000000"
-            wrapped = wrap_text(row["text"], font, max_text_width, draw)
-            line_h = row_height
-            total_h = len(wrapped) * line_h
-            rh = max(total_h, line_h)
-            pad_y = 13  # 固定顶部内边距（稍大，往下调）
-            draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
-            for i, line in enumerate(wrapped):
-                ly = current_y + i * line_h + pad_y
-                draw.text((margin + 15, ly), line, font=font, fill=text_color)
-            current_y += rh
-
-    # 绘制底部备注
-    footer_text = f"YOUDOO BOX 毛利测算模型 V6.7 | 生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
-    draw.rectangle([0, current_y, img_width, current_y + footer_height], fill="#F5F5F5")
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_w = footer_bbox[2] - footer_bbox[0]
-    draw.text(((img_width - footer_w)/2, current_y + 20), footer_text, font=font_footer, fill="#666666")
-
-    # 转字节流
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format='PNG')
-    img_byte_arr.seek(0)
-    return img_byte_arr
-
-# 生成按钮
 if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
-    # 基础信息
-    scheme_name = random.choice(SCHEME_NAME_LIST)
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    # 生成图片
-    img_bytes = create_scheme_image(scheme_name, now, price_mode, use_channel_stage)
-    
-    # 手机端提示
-    st.success("✅ 方案信息图已生成！长按图片可以选择保存图片到手机相册")
-    # 渲染原生图片（手机端长按可保存）
-    st.image(img_bytes, use_column_width=True)
-    # 额外增加一键下载按钮
+
+    # 毛利颜色（和PC版一致，用HTML CSS精确控制）
+    sky_color = "#27AE60" if total_skyworth_profit >= 0 else "#E74C3C"
+    you_color = "#27AE60" if total_youduo_profit >= 0 else "#E74C3C"
+    tot_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+
+    sky_delta = f"硬件 {round(total_skyworth_hardware_profit/10000,1)}万  |  续费 {round(total_skyworth_renew_profit/10000,1)}万"
+    you_delta = f"硬件 {round(total_youduo_hardware_profit/10000,1)}万  |  续费 {round(total_youduo_renew_profit/10000,1)}万"
+
+    sku_table_rows = ''.join(
+        f'<tr><td><b>{s}</b></td>'
+        + ''.join(f'<td>{sku_base_config[s][k]}</td>' for k in ['default_extra_remote','default_light_gun','default_vip_month','default_vip_year','default_parent_card','default_nfc_full','default_nfc_ssr'])
+        + '</tr>'
+        for s in sku_list
+    )
+
+    ch_rows = ''.join(
+        f'<div style="padding:9px 16px;border-bottom:1px solid #f0f0f0;background:{"#f0f8ff" if i%2==0 else "white"}"><b>{ch}</b>：当前费率 {channel_rate_config[ch]}%  |  销量 {channel_volume_dict[ch]:,} 台</div>'
+        for i, ch in enumerate(all_ch)
+    )
+
+    param_rows = ''.join(
+        f'<div style="padding:9px 16px;border-bottom:1px solid #f0f0f0;background:{"#fff0f0" if i%2==0 else "white"}"><b>{n}</b>：{v}</div>'
+        for i, (n, v) in enumerate([
+            ("续费年卡价格", f"¥{renew_vip_year_price}"),
+            ("续费月卡价格", f"¥{renew_vip_month_price}"),
+            ("会员续费率", f"{renew_rate}%"),
+            ("年卡续费占比", f"{year_card_renew_ratio}%"),
+            ("单台版权费", f"¥{royalty_fee}"),
+            ("创维分成比例", f"{vip_split_rate_pct}%"),
+            ("折价计提比例", f"{vip_discount_rate_pct}%"),
+            ("基础硬件成本", f"¥{base_hardware_cost}")
+        ])
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<style>
+*{{font-family:'PingFang SC','Microsoft YaHei',Arial,sans-serif;box-sizing:border-box;margin:0;padding:0}}
+body{{background:#F8F9FA;padding:0;color:#333}}
+.header{{background:#2C3E50;color:white;padding:18px 24px;text-align:center}}
+.header h1{{font-size:19px;margin-bottom:5px}}
+.header p{{font-size:12px;color:#ccc;margin:3px 0 0}}
+.section{{margin:14px;background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.1)}}
+.sec-title{{padding:9px 16px;color:white;font-size:13px;font-weight:bold}}
+.blue{{background:#4A90D9}} .green{{background:#27AE60}} .orange{{background:#F39C12}}
+.purple{{background:#9B59B6}} .red{{background:#E74C3C}}
+.metric-card{{padding:0}}
+.mv-row{{display:flex;align-items:center;padding:9px 16px;border-bottom:1px solid #eee}}
+.mv-label{{flex:1;font-size:13px}} .mv-value{{font-size:17px;font-weight:bold;margin:0 14px}} .mv-delta{{font-size:11px;color:#888}}
+.info-row{{padding:9px 16px;border-bottom:1px solid #f0f0f0;font-size:13px}} .info-row:nth-child(even){{background:#fafafa}}
+table{{width:100%;border-collapse:collapse;font-size:12px}} th{{background:rgba(0,0,0,0.04);padding:8px 10px;text-align:center;color:#555;font-weight:bold}} td{{padding:7px 10px;text-align:center;border-bottom:1px solid #f0f0f0}} tr:last-child td{{border-bottom:none}}
+.footer{{text-align:center;color:#bbb;font-size:11px;padding:14px;border-top:1px solid #eee;margin-top:14px}}
+</style></head><body>
+<div class="header">
+    <h1>🎮 YOUDOO BOX 毛利测算方案报告</h1>
+    <p>生成时间：{now}  |  售价模式：{price_mode}  |  成本阶段：{use_channel_stage}</p>
+</div>
+
+<div class="section" style="margin:14px;">
+    <div class="sec-title blue">📊 核心指标</div>
+    <div class="info-row" style="background:#f5f5f5"><b>全渠道总销售额</b>：<b>¥{round(total_revenue/10000,1)} 万元</b></div>
+    <div class="info-row"><b>全渠道总销量</b>：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per,0)} 元</div>
+    <div class="info-row" style="background:#f5f5f5"><b>渠道综合成本</b>：¥{round(total_channel_cost/10000,1)} 万元  |  综合费率 {round(avg_channel_rate,2)}%</div>
+    <div class="mv-row"><span class="mv-label">创维数字总毛利</span><span class="mv-value" style="color:{sky_color}">¥{round(total_skyworth_profit/10000,1)} 万元</span><span class="mv-delta">{sky_delta}</span></div>
+    <div class="mv-row" style="background:#f0f8ff"><span class="mv-label">创想悦动总毛利</span><span class="mv-value" style="color:{you_color}">¥{round(total_youduo_profit/10000,1)} 万元</span><span class="mv-delta">{you_delta}</span></div>
+    <div class="mv-row"><span class="mv-label">产品总毛利</span><span class="mv-value" style="color:{tot_color}">¥{round(total_profit/10000,1)} 万元</span><span class="mv-delta">综合毛利率 {total_margin_rate}%</span></div>
+</div>
+
+<div class="section" style="margin:14px;">
+    <div class="sec-title green">📦 套装价格</div>
+    <table><tr><th>SKU版本</th><th>官方指导价</th><th>大促价</th></tr>
+    <tr><td>标准版</td><td>¥{std_guide_price}</td><td>¥{std_promo_price}</td></tr>
+    <tr><td>家庭版</td><td>¥{fam_guide_price}</td><td>¥{fam_promo_price}</td></tr>
+    <tr><td>豪华版</td><td>¥{lux_guide_price}</td><td>¥{lux_promo_price}</td></tr>
+    </table>
+</div>
+
+<div class="section" style="margin:14px;">
+    <div class="sec-title orange">🎁 各SKU赠品/配件配置</div>
+    <table><tr><th>SKU</th><th>遥控器</th><th>光枪</th><th>VIP月卡</th><th>VIP年卡</th><th>家长卡</th><th>NFC全套</th><th>NFC SSR</th></tr>
+    {sku_table_rows}
+    </table>
+</div>
+
+<div class="section" style="margin:14px;">
+    <div class="sec-title purple">💰 渠道参数</div>
+    {ch_rows}
+</div>
+
+<div class="section" style="margin:14px;">
+    <div class="sec-title red">📋 会员·版权金·其他参数</div>
+    {param_rows}
+</div>
+
+<div class="footer">YOUDOO BOX 毛利测算模型 V6.7  |  自动生成</div>
+</body></html>"""
+
+    buf = io.BytesIO(html.encode("utf-8"))
+    st.success("✅ 方案信息图已生成！可预览也可下载保存。")
     st.download_button(
-        label="📥 一键下载PNG图片",
-        data=img_bytes,
-        file_name=f"YOUDOO售价方案_{scheme_name}版_{datetime.now().strftime('%Y%m%d')}.png",
-        mime="image/png",
+        label="📥 下载 HTML 方案文件",
+        data=buf,
+        file_name=f"YOUDOO_方案_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+        mime="text/html",
         use_container_width=True
     )
+    st.subheader("📋 方案预览")
+    st.components.v1.html(html, height=900, scrolling=True)
