@@ -384,17 +384,36 @@ with c2:
     st.metric("渠道综合成本", f"{round(total_channel_cost/10000, 1)} 万元", f"单台 ¥{round(avg_channel_cost_per_total, 0)}")
 
 c3, c4 = st.columns(2)
+skyworth_color = "#27AE60" if total_skyworth_profit >= 0 else "#E74C3C"
+youduo_color = "#27AE60" if total_youduo_profit >= 0 else "#E74C3C"
+total_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+
 with c3:
-    st.metric("创维数字总毛利", f"{round(total_skyworth_profit/10000, 1)} 万元",
-              f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万 | 续费 {round(total_skyworth_renew_profit/10000, 1)}万")
+    st.markdown(f"""
+    <div style="padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background: white;">
+        <p style="margin: 0; font-size: 13px; color: #000;">创维数字总毛利</p>
+        <h3 style="margin: 5px 0; color: {skyworth_color}; font-size: 20px;">{round(total_skyworth_profit/10000, 1)} 万元</h3>
+        <p style="margin: 0; font-size: 11px; color: #000;">硬件 {round(total_skyworth_hardware_profit/10000, 1)}万 | 续费 {round(total_skyworth_renew_profit/10000, 1)}万</p>
+    </div>
+    """, unsafe_allow_html=True)
 with c4:
-    st.metric("创想悦动总毛利", f"{round(total_youduo_profit/10000, 1)} 万元",
-              f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万 | 续费 {round(total_youduo_renew_profit/10000, 1)}万")
+    st.markdown(f"""
+    <div style="padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background: white;">
+        <p style="margin: 0; font-size: 13px; color: #000;">创想悦动总毛利</p>
+        <h3 style="margin: 5px 0; color: {youduo_color}; font-size: 20px;">{round(total_youduo_profit/10000, 1)} 万元</h3>
+        <p style="margin: 0; font-size: 11px; color: #000;">硬件 {round(total_youduo_hardware_profit/10000, 1)}万 | 续费 {round(total_youduo_renew_profit/10000, 1)}万</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 c5, _ = st.columns([1, 2])
 with c5:
-    st.metric("产品总毛利", f"{round(total_profit/10000, 1)} 万元",
-              f"综合毛利率 {total_margin_rate}%")
+    st.markdown(f"""
+    <div style="padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background: white;">
+        <p style="margin: 0; font-size: 13px; color: #000;">产品总毛利</p>
+        <h3 style="margin: 5px 0; color: {total_color}; font-size: 20px;">{round(total_profit/10000, 1)} 万元</h3>
+        <p style="margin: 0; font-size: 11px; color: #000;">综合毛利率 {total_margin_rate}%</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- 续费联动说明 ---
 st.markdown(f"""
