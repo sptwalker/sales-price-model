@@ -683,19 +683,112 @@ tr:last-child td{{border-bottom:none}}
 </html>"""
         return html
 
-    plan_html = build_plan_html()
-    plan_bytes = plan_html.encode('utf-8')
-    buf = io.BytesIO(plan_bytes)
+    # 用 Plotly Table 生成图片报告（浏览器可直接右键另存为PNG）
+    fig_report = go.Figure()
 
-    st.success("✅ 方案信息图已生成！可预览也可下载保存。")
-    st.download_button(
-        label="📥 点击下载方案图片（HTML）",
-        data=buf,
-        file_name=f"YOUDOO_方案_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
-        mime="text/html",
-        use_container_width=True
+    # ── 1. 核心指标表 ──
+    metrics_cells = [
+        ["全渠道总销售额", f"¥{round(total_revenue/10000,1)} 万元"],
+        ["全渠道总销量", f"{total_sales_volume:,} 台"],
+        ["单台均价", f"¥{round(avg_price_per,0)} 元"],
+        ["渠道综合成本", f"¥{round(total_channel_cost/10000,1)} 万元"],
+        ["渠道综合费率", f"{round(avg_channel_rate,2)}%"],
+        ["创维数字总毛利", f"¥{round(total_skyworth_profit/10000,1)} 万元"],
+        ["创想悦动总毛利", f"¥{round(total_youduo_profit/10000,1)} 万元"],
+        ["产品总毛利", f"¥{round(total_profit/10000,1)} 万元"],
+        ["综合毛利率", f"{total_margin_rate}%"],
+    ]
+    fig_report.add_trace(go.Table(
+        header=dict(values=["<b>📊 核心指标</b>", ""],
+                    fill_color="#4A90D9", font=dict(size=13, color="white"), align="center",
+                    height=36),
+        cells=dict(values=[[r[0] for r in metrics_cells], [r[1] for r in metrics_cells]],
+                   fill_color=[["#F0F8FF" if i%2==0 else "white" for i in range(len(metrics_cells))]],
+                   font=dict(size=12), align="left", height=30)
+    ))
+
+    # ── 2. 套装价格表 ──
+    price_cells = [["标准版", f"¥{std_guide_price}", f"¥{std_promo_price}"],
+                   ["家庭版", f"¥{fam_guide_price}", f"¥{fam_promo_price}"],
+                   ["豪华版", f"¥{lux_guide_price}", f"¥{lux_promo_price}"]]
+    fig_report.add_trace(go.Table(
+        header=dict(values=["<b>📦 套装价格</b>", "官方指导价", "大促价"],
+                    fill_color="#27AE60", font=dict(size=13, color="white"), align="center", height=36),
+        cells=dict(values=[ [r[0] for r in price_cells],
+                            [r[1] for r in price_cells],
+                            [r[2] for r in price_cells] ],
+                   fill_color=[["#F0FFF4" if i%2==0 else "white" for i in range(3)]],
+                   font=dict(size=12), align="center", height=30)
+    ))
+
+    # ── 3. SKU赠品配置表 ──
+    gift_cells = []
+    for sku_name in sku_list:
+        sc = sku_base_config[sku_name]
+        gift_cells.append([
+            sku_name,
+            str(sc["default_extra_remote"]),
+            str(sc["default_light_gun"]),
+            f"月卡{sc['default_vip_month']}/年卡{sc['default_vip_year']}",
+            str(sc["default_parent_card"]),
+            f"全套{sc['default_nfc_full']}/SSR{sc['default_nfc_ssr']}"
+        ])
+    fig_report.add_trace(go.Table(
+        header=dict(values=["<b>🎁 SKU赠品配置</b>", "遥控器", "光枪", "VIP卡", "家长钥匙卡", "NFC卡"],
+                    fill_color="#F39C12", font=dict(size=12, color="white"), align="center", height=36),
+        cells=dict(values=[ [r[0] for r in gift_cells],
+                            [r[1] for r in gift_cells],
+                            [r[2] for r in gift_cells],
+                            [r[3] for r in gift_cells],
+                            [r[4] for r in gift_cells],
+                            [r[5] for r in gift_cells] ],
+                   fill_color=[["#FFFBF0" if i%2==0 else "white" for i in range(6)]],
+                   font=dict(size=11), align="center", height=30)
+    ))
+
+    # ── 4. 渠道参数表 ──
+    ch_cells = []
+    for ch in all_ch:
+        ch_cells.append([ch, f"{channel_rate_config[ch]}%", f"{channel_volume_dict[ch]:,}台"])
+    fig_report.add_trace(go.Table(
+        header=dict(values=["<b>💰 渠道参数</b>", "当前费率", "销量"],
+                    fill_color="#9B59B6", font=dict(size=13, color="white"), align="center", height=36),
+        cells=dict(values=[ [r[0] for r in ch_cells],
+                            [r[1] for r in ch_cells],
+                            [r[2] for r in ch_cells] ],
+                   fill_color=[["#F5F0FF" if i%2==0 else "white" for i in range(3)]],
+                   font=dict(size=12), align="center", height=30)
+    ))
+
+    # ── 5. 会员·版权金·其他参数表 ──
+    other_cells = [
+        ["续费年卡价格", f"¥{renew_vip_year_price}"],
+        ["续费月卡价格", f"¥{renew_vip_month_price}"],
+        ["会员续费率", f"{renew_rate}%"],
+        ["年卡续费占比", f"{year_card_renew_ratio}%"],
+        ["单台版权费", f"¥{royalty_fee}"],
+        ["创维分成比例", f"{vip_split_rate_pct}%"],
+        ["折价计提比例", f"{vip_discount_rate_pct}%"],
+        ["基础硬件成本", f"¥{base_hardware_cost}"],
+    ]
+    fig_report.add_trace(go.Table(
+        header=dict(values=["<b>📋 会员·版权金·其他参数</b>", ""],
+                    fill_color="#E74C3C", font=dict(size=13, color="white"), align="center", height=36),
+        cells=dict(values=[ [r[0] for r in other_cells], [r[1] for r in other_cells] ],
+                   fill_color=[["#FFF0F0" if i%2==0 else "white" for i in range(len(other_cells))]],
+                   font=dict(size=12), align="left", height=30)
+    ))
+
+    fig_report.update_layout(
+        title=dict(
+            text=f"<b>🎮 YOUDOO BOX 毛利测算方案报告</b><br>"
+                 f"<span style='font-size:12px;color:#888'>生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</span>",
+            x=0.5, xanchor="center", font_size=16
+        ),
+        height=1600,
+        margin=dict(l=20, r=20, t=80, b=40),
+        dragmode=False
     )
 
-    # 页面内预览
-    st.subheader("📋 方案预览")
-    st.components.v1.html(plan_html, height=900, scrolling=True)
+    st.success("✅ 方案信息图已生成！右键图片 → 「图片另存为」可保存为 PNG。")
+    st.plotly_chart(fig_report, use_container_width=True, config=PLOTLY_CONFIG)
