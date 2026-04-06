@@ -779,18 +779,22 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
         elif row["type"] == "table":
             # 绘制表格
             num_cols = len(row["headers"])
-            col_widths = [(img_width - 2 * margin) / num_cols] * num_cols
+            col_w = (img_width - 2 * margin) / num_cols
             row_h = 38
+            cell_pad_x = 8   # 单元格内左右边距
+            cell_pad_y = 9   # 单元格内上下边距（控制垂直居中）
 
             # 表头行
             rh = row_h
             draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["header_bg"])
             for ci, hdr in enumerate(row["headers"]):
-                cx = margin + ci * col_widths[ci]
+                cx = margin + ci * col_w
+                # 水平居中
                 bbox = draw.textbbox((0, 0), hdr, font=font_content)
                 tw = bbox[2] - bbox[0]
-                th = bbox[3] - bbox[1]
-                draw.text((cx + (col_widths[ci] - tw) / 2, current_y + (rh - th) / 2), hdr, font=font_content, fill="white")
+                tx = cx + (col_w - tw) / 2
+                ty = current_y + cell_pad_y
+                draw.text((tx, ty), hdr, font=font_content, fill="white")
             current_y += rh
 
             # 数据行
@@ -798,11 +802,12 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
                 bg = "#FFF8E8" if ri % 2 == 0 else "#FFFFFF"
                 draw.rectangle([margin, current_y, img_width - margin, current_y + row_h], fill=bg)
                 for ci, val in enumerate(data_row):
-                    cx = margin + ci * col_widths[ci]
+                    cx = margin + ci * col_w
                     bbox = draw.textbbox((0, 0), str(val), font=font_content)
                     tw = bbox[2] - bbox[0]
-                    th = bbox[3] - bbox[1]
-                    draw.text((cx + (col_widths[ci] - tw) / 2, current_y + (row_h - th) / 2), str(val), font=font_content, fill="#333333")
+                    tx = cx + (col_w - tw) / 2
+                    ty = current_y + cell_pad_y
+                    draw.text((tx, ty), str(val), font=font_content, fill="#333333")
                 current_y += row_h
 
         else:
