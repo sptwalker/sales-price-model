@@ -359,13 +359,14 @@ PLOTLY_CONFIG = {
 # ============================================================
 # 4. 主界面 - 手机版展示
 # ============================================================
-st.title("🎮 YOUDOO BOX 产品毛利测算模型 V6.5 手机版")
+st.title("🎮 YOUDOO BOX 产品毛利测算模型 V6.6 手机版")
 st.caption("✅ 销量-会员收入-毛利强关联修正 | 硬件/续费毛利拆分展示")
 
 st.divider()
 
 # --- 核心指标：手机端2列卡片 ---
 st.subheader("📊 核心指标")
+st.metric("全渠道总销售额", f"¥{round(total_revenue/10000, 1)} 万元", f"全渠道总销量 {total_sales_volume:,} 台 | 均价 ¥{round(avg_price_per, 0)}")
 c1, c2 = st.columns(2)
 with c1:
     st.metric("全渠道总销量", f"{total_sales_volume:,} 台", f"均价 ¥{round(avg_price_per, 0)}")
