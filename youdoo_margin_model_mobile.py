@@ -7,6 +7,7 @@ from datetime import datetime
 import io
 import random
 from PIL import Image, ImageDraw, ImageFont
+import os
 
 # ============================================================
 # 页面配置 - 手机版
@@ -588,10 +589,45 @@ with c_d2:
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
 # ============================================================
-# 【最终修复版】纯静态PNG方案信息图生成（手机端长按可保存）
+# 【中文乱码修复版】纯静态PNG方案信息图生成
 # ============================================================
 st.divider()
 st.subheader("💾 保存当前方案")
+
+# 中文兼容字体加载函数（核心修复）
+def load_chinese_font(font_type="regular", font_size=18):
+    # 字体优先级：本地思源黑体 > 系统中文字体 > 默认字体
+    font_paths = []
+    
+    # 1. 优先加载项目根目录的思源黑体
+    if font_type == "bold":
+        font_paths.append("NotoSansSC-Bold.ttf")
+    else:
+        font_paths.append("NotoSansSC-Regular.ttf")
+    
+    # 2. Windows系统兼容
+    font_paths.append("C:/Windows/Fonts/msyh.ttc")  # 微软雅黑
+    font_paths.append("C:/Windows/Fonts/simhei.ttf") # 黑体
+    
+    # 3. MacOS系统兼容
+    font_paths.append("/System/Library/Fonts/PingFang.ttc") # 苹方
+    font_paths.append("/System/Library/Fonts/STHeiti Light.ttc") # 华文黑体
+    
+    # 4. Linux/Streamlit Cloud系统兼容
+    font_paths.append("/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf")
+    font_paths.append("/usr/share/fonts/opentype/noto/NotoSansSC-Regular.ttf")
+
+    # 循环尝试加载字体
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, font_size)
+            except:
+                continue
+    
+    # 全部失败，fallback到默认字体
+    st.warning("⚠️ 未找到中文字体，部分文字可能显示异常，请上传思源黑体字体文件到项目根目录")
+    return ImageFont.load_default(size=font_size)
 
 # 图片生成函数
 def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
@@ -647,23 +683,19 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     image = Image.new("RGB", (img_width, img_height), "white")
     draw = ImageDraw.Draw(image)
 
-    # 加载字体（跨平台兼容）
-    try:
-        # Streamlit Cloud Linux环境默认字体
-        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 24)
-        font_content = ImageFont.truetype("DejaVuSans.ttf", 18)
-        font_footer = ImageFont.truetype("DejaVuSans.ttf", 14)
-    except:
-        # Windows/Mac fallback
-        font_title = ImageFont.load_default(size=24)
-        font_content = ImageFont.load_default(size=18)
-        font_footer = ImageFont.load_default(size=14)
+    # 加载中文字体（核心修复）
+    font_main_title = load_chinese_font("bold", 24)
+    font_title = load_chinese_font("bold", 20)
+    font_content = load_chinese_font("regular", 18)
+    font_footer = load_chinese_font("regular", 14)
 
     # 绘制顶部主标题
     main_title = f"YOUDOO BOX售价测算方案（{scheme_name}版）"
     draw.rectangle([0, 0, img_width, header_height], fill="#2C3E50")
-    title_w, title_h = draw.textbbox((0, 0), main_title, font=font_title)[2:4]
-    draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_title, fill="white")
+    title_bbox = draw.textbbox((0, 0), main_title, font=font_main_title)
+    title_w = title_bbox[2] - title_bbox[0]
+    title_h = title_bbox[3] - title_bbox[1]
+    draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_main_title, fill="white")
 
     # 绘制内容行
     current_y = header_height
@@ -675,14 +707,18 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
         # 绘制文字
         text_color = row.get("text_color", "#000000")
         font = font_title if row["type"] == "title" else font_content
-        draw.text((margin + 15, current_y + (rh - font.size)/2), row["text"], font=font, fill=text_color)
+        text_bbox = draw.textbbox((0, 0), row["text"], font=font)
+        text_h = text_bbox[3] - text_bbox[1]
+        draw.text((margin + 15, current_y + (rh - text_h)/2), row["text"], font=font, fill=text_color)
         # 下移
         current_y += rh
 
     # 绘制底部备注
     footer_text = f"生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
     draw.rectangle([0, current_y, img_width, current_y + footer_height], fill="#F5F5F5")
-    footer_w, footer_h = draw.textbbox((0, 0), footer_text, font=font_footer)[2:4]
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    footer_w = footer_bbox[2] - footer_bbox[0]
+    footer_h = footer_bbox[3] - footer_bbox[1]
     draw.text(((img_width - footer_w)/2, current_y + (footer_height - footer_h)/2), footer_text, font=font_footer, fill="#666666")
 
     # 转字节流
