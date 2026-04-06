@@ -311,8 +311,8 @@ st.sidebar.caption("赠送会员到期后，用户主动续费的收入计算")
 col_vip1, col_vip2 = st.sidebar.columns(2)
 with col_vip1:
     renew_vip_year_price = st.slider("续费年卡价格（元）", 200, 500, 358)
-    renew_rate = st.slider("会员续费率（%）", 5, 60, 25, format="%d%%")
-    renew_years = st.slider("续费计算年限", 1, 5, 3)
+    renew_rate = st.slider("会员续费率（%）", 10, 90, 25, format="%d%%")
+    renew_years = 1
 with col_vip2:
     renew_vip_month_price = st.slider("续费月卡价格（元）", 20, 80, 49)
     year_card_renew_ratio = st.slider("年卡续费占比（%）", 0, 100, 80, format="%d%%")
