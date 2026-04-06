@@ -5,9 +5,9 @@ import plotly.graph_objects as go
 import numpy as np
 
 # 页面配置
-st.set_page_config(page_title="YOUDOO BOX 毛利测算模型 V6.2", layout="wide", page_icon="🎮")
-st.title("🎮 YOUDOO BOX 产品毛利测算财务模型 V6.2")
-st.caption("默认值调整 | 桑基图字体优化 | 双数据饼图 | 新增双变量敏感性分析")
+st.set_page_config(page_title="YOUDOO BOX 毛利测算模型 V6.3", layout="wide", page_icon="🎮")
+st.title("🎮 YOUDOO BOX 产品毛利测算财务模型 V6.3")
+st.caption("新增会员续费收入模块 | 年度/月度会员价独立设置 | 续费率自定义 | 原有布局完全保留")
 
 # -------------------------- 0. Session State 全量初始化 --------------------------
 # 渠道占比初始化
@@ -20,15 +20,15 @@ if "douyin_ratio" not in st.session_state:
 if "offline_ratio" not in st.session_state:
     st.session_state.offline_ratio = 50
 
-# 【修改1】线下SKU占比默认值调整：家庭版80%，豪华版20%
+# SKU占比初始化
 if "online_standard_ratio" not in st.session_state:
     st.session_state.online_standard_ratio = 60
 if "online_family_ratio" not in st.session_state:
     st.session_state.online_family_ratio = 40
 if "offline_family_ratio" not in st.session_state:
-    st.session_state.offline_family_ratio = 80  # 默认80%
+    st.session_state.offline_family_ratio = 80
 if "offline_luxury_ratio" not in st.session_state:
-    st.session_state.offline_luxury_ratio = 20  # 默认20%
+    st.session_state.offline_luxury_ratio = 20
 
 # 套装价格初始化
 if "std_guide" not in st.session_state:
@@ -160,7 +160,7 @@ item_cost = {
     "card_cost_rate": 0.2
 }
 
-# -------------------------- 2. 侧边栏参数面板 --------------------------
+# -------------------------- 2. 侧边栏参数面板（严格按要求插入续费模块） --------------------------
 # 第一区：全渠道销量与分配
 st.sidebar.header("📊 全渠道销量与分配")
 total_sales_volume = st.sidebar.slider("全渠道总销售总量（台）", 20000, 500000, 100000, step=10000)
@@ -277,7 +277,7 @@ sku_price_config = {
     "豪华版": {"guide_price": lux_guide_price, "promo_price": lux_promo_price}
 }
 
-# 套装赠品/附件配置区
+# 第五区：套装赠品/附件配置区
 st.sidebar.divider()
 st.sidebar.header("🎁 套装赠品/附件配置")
 selected_sku_for_config = st.sidebar.selectbox("选择要配置的套装", sku_list)
@@ -304,10 +304,27 @@ sku_base_config[selected_sku_for_config].update({
     "default_nfc_ssr": nfc_ssr
 })
 
-# 分账与成本参数
+# ==================================
+# 【新增】第六区：会员续费收入设置区（严格按要求放在套装配置和分账参数之间）
+# ==================================
+st.sidebar.divider()
+st.sidebar.header("📅 会员续费收入设置")
+st.sidebar.caption("赠送会员到期后，用户主动续费的收入计算")
+col_vip1, col_vip2 = st.sidebar.columns(2)
+with col_vip1:
+    renew_vip_year_price = st.slider("续费年卡价格（元）", 200, 500, 358)
+    renew_rate = st.slider("会员续费率（%）", 5, 60, 25, format="%d%%")
+    renew_years = st.slider("续费计算年限", 1, 5, 3)
+with col_vip2:
+    renew_vip_month_price = st.slider("续费月卡价格（元）", 20, 80, 49)
+    year_card_renew_ratio = st.slider("年卡续费占比（%）", 0, 100, 80, format="%d%%")
+st.sidebar.caption("年卡续费占比：续费用户中选择年卡的比例，剩余用户选择月卡")
+
+# ==================================
+# 第七区：其他分账与成本参数（原位置不变）
+# ==================================
 st.sidebar.divider()
 st.sidebar.subheader("💰 其他分账与成本参数")
-# 【修改1】单台版权费默认值改为200元
 royalty_fee = st.sidebar.slider("单台版权费（创维→创想，元）", 100, 300, 200)
 vip_split_rate_pct = st.sidebar.slider("会员收入创维分成比例", 0, 50, 20, format="%d%%")
 vip_split_rate = vip_split_rate_pct / 100
@@ -315,10 +332,11 @@ vip_discount_rate_pct = st.sidebar.slider("赠送会员折价计提比例", 0, 1
 vip_discount_rate = vip_discount_rate_pct / 100
 base_hardware_cost = st.sidebar.number_input("基础硬件成本（含标配/运输/售后，元）", value=984)
 
-# -------------------------- 3. 核心财务计算 --------------------------
+# -------------------------- 3. 核心财务计算（含新增续费收入） --------------------------
 sku_calc_detail = {}
-total_skyworth_profit = 0
-total_youduo_profit = 0
+# 硬件销售基础数据
+total_skyworth_hardware_profit = 0
+total_youduo_hardware_profit = 0
 total_revenue = 0
 total_channel_cost = 0
 total_p_hw = 0
@@ -331,10 +349,11 @@ total_c_card = 0
 total_c_vip_discount = 0
 channel_cost_detail = []
 
-# 【修改3】双数据饼图数据准备
-sku_sales_amount = {}  # 各SKU销售金额
-sku_sales_cost = {}    # 各SKU销售成本
+# 双数据饼图数据准备
+sku_sales_amount = {}
+sku_sales_cost = {}
 
+# 基础硬件销售计算
 for sku in sku_list:
     sku_config = sku_base_config[sku]
     sku_vol = sku_total_volume[sku]
@@ -381,11 +400,11 @@ for sku in sku_list:
     vip_discount_cost_per = vip_total_price * vip_discount_rate
     s_split_per = vip_total_price * vip_split_rate
     
-    # 双主体单台毛利计算
+    # 双主体单台硬件毛利计算
     skyworth_profit_per = p_hw_per + s_split_per - base_hardware_cost - extra_hardware_cost - avg_channel_cost_per - royalty_fee
     youduo_profit_per = p_sw_per + royalty_fee - s_split_per - card_cost_per - vip_discount_cost_per
     
-    # 【修改3】计算各SKU销售金额和成本
+    # 双数据饼图数据
     sku_total_revenue = sku_price * sku_vol
     sku_total_cost = (base_hardware_cost + extra_hardware_cost + avg_channel_cost_per + card_cost_per) * sku_vol
     sku_sales_amount[sku] = sku_total_revenue
@@ -397,16 +416,16 @@ for sku in sku_list:
         "单台售价": sku_price,
         "单台渠道费率": f"{round(avg_channel_rate,2)}%",
         "单台渠道成本": round(avg_channel_cost_per,2),
-        "单台创维毛利": round(skyworth_profit_per,2),
-        "单台创想毛利": round(youduo_profit_per,2),
-        "创维总毛利": round(skyworth_profit_per * sku_vol,2),
-        "创想总毛利": round(youduo_profit_per * sku_vol,2),
-        "综合毛利率": round((skyworth_profit_per + youduo_profit_per) / sku_price * 100, 2)
+        "单台创维硬件毛利": round(skyworth_profit_per,2),
+        "单台创想硬件毛利": round(youduo_profit_per,2),
+        "创维硬件总毛利": round(skyworth_profit_per * sku_vol,2),
+        "创想硬件总毛利": round(youduo_profit_per * sku_vol,2),
+        "综合硬件毛利率": round((skyworth_profit_per + youduo_profit_per) / sku_price * 100, 2)
     }
     
     # 全量数据汇总
-    total_skyworth_profit += skyworth_profit_per * sku_vol
-    total_youduo_profit += youduo_profit_per * sku_vol
+    total_skyworth_hardware_profit += skyworth_profit_per * sku_vol
+    total_youduo_hardware_profit += youduo_profit_per * sku_vol
     total_revenue += sku_price * sku_vol
     total_channel_cost += avg_channel_cost_per * sku_vol
     total_p_hw += p_hw_per * sku_vol
@@ -417,6 +436,25 @@ for sku in sku_list:
     total_s_split += s_split_per * sku_vol
     total_c_card += card_cost_per * sku_vol
     total_c_vip_discount += vip_discount_cost_per * sku_vol
+
+# ==================================
+# 【新增】会员续费收入计算
+# ==================================
+# 单用户年均续费收入
+month_card_renew_ratio = 1 - year_card_renew_ratio / 100
+single_user_year_renew_revenue = (renew_rate / 100) * (
+    (year_card_renew_ratio / 100) * renew_vip_year_price
+    + month_card_renew_ratio * renew_vip_month_price * 12
+)
+# 累计总续费收入
+total_renew_revenue = total_sales_volume * single_user_year_renew_revenue * renew_years
+# 双主体分账
+total_skyworth_renew_profit = total_renew_revenue * vip_split_rate
+total_youduo_renew_profit = total_renew_revenue * (1 - vip_split_rate)
+# 最终总毛利（硬件+续费）
+total_skyworth_profit = total_skyworth_hardware_profit + total_skyworth_renew_profit
+total_youduo_profit = total_youduo_hardware_profit + total_youduo_renew_profit
+total_profit = total_skyworth_profit + total_youduo_profit
 
 # 计算加权平均单台数据
 if total_sales_volume > 0:
@@ -433,14 +471,12 @@ if total_sales_volume > 0:
     avg_c_vip_discount_per = total_c_vip_discount / total_sales_volume
     avg_skyworth_profit_per = total_skyworth_profit / total_sales_volume
     avg_youduo_profit_per = total_youduo_profit / total_sales_volume
-    total_profit = total_skyworth_profit + total_youduo_profit
 else:
     avg_price_per = 0
     avg_channel_cost_per = 0
     avg_channel_rate = 0
     avg_skyworth_profit_per = 0
     avg_youduo_profit_per = 0
-    total_profit = 0
 
 # 渠道成本明细汇总
 for ch in all_channel:
@@ -471,7 +507,7 @@ for ch in all_channel:
 channel_cost_df = pd.DataFrame(channel_cost_detail)
 sku_summary_df = pd.DataFrame.from_dict(sku_calc_detail, orient="index").reset_index().rename(columns={"index": "SKU版本"})
 
-# -------------------------- 4. 主界面展示 --------------------------
+# -------------------------- 4. 主界面展示（原有布局完全不变，仅新增续费明细） --------------------------
 # 核心指标卡片
 st.divider()
 col1, col2, col3, col4, col5 = st.columns(5)
@@ -501,18 +537,21 @@ with col4:
     """, unsafe_allow_html=True)
 with col5:
     total_color = "green" if total_profit >= 0 else "red"
-    total_margin_rate = round(total_profit / total_revenue * 100, 2) if total_revenue >0 else 0
+    total_margin_rate = round(total_profit / (total_revenue + total_renew_revenue) * 100, 2) if (total_revenue + total_renew_revenue) >0 else 0
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
-        <p style="margin:0; font-size:14px; color:#555;">产品总毛利</p>
+        <p style="margin:0; font-size:14px; color:#555;">产品总毛利（含续费）</p>
         <h3 style="margin:5px 0; color:{total_color};">{round(total_profit/10000,2)} 万元</h3>
         <p style="margin:0; font-size:12px; color:{total_color};">综合毛利率 {total_margin_rate}%</p>
     </div>
     """, unsafe_allow_html=True)
 
-# 【修改2】资金流向桑基图（字体颜色改为黑色）
+# 新增续费收入核心指标卡片
+st.caption(f"💡 会员续费收入累计：{round(total_renew_revenue/10000,2)} 万元 | 其中创维分成：{round(total_skyworth_renew_profit/10000,2)} 万元，创想分成：{round(total_youduo_renew_profit/10000,2)} 万元")
+
+# 资金流向桑基图（字体黑色，原有逻辑不变）
 st.divider()
-st.subheader("💸 加权平均单台资金流向图")
+st.subheader("💸 加权平均单台资金流向图（硬件销售部分）")
 sankey_labels = [
     "消费者支付", "渠道成本", "创维数字总收入", "创想悦动总收入",
     "基础硬件成本", "额外配件成本", "支付创想版权费", "创维数字毛利",
@@ -522,8 +561,8 @@ sankey_source = [0, 0, 0, 2, 2, 2, 2, 8, 6, 3, 3, 3, 3]
 sankey_target = [1, 2, 3, 4, 5, 6, 7, 2, 3, 8, 9, 10, 11]
 sankey_values = [
     avg_channel_cost_per, avg_p_hw_per, avg_p_sw_per,
-    avg_c_hw_base_per, avg_c_hw_extra_per, avg_r_royalty_per, max(avg_skyworth_profit_per, 0),
-    avg_s_split_per, avg_r_royalty_per, avg_s_split_per, avg_c_card_per, avg_c_vip_discount_per, max(avg_youduo_profit_per, 0)
+    avg_c_hw_base_per, avg_c_hw_extra_per, avg_r_royalty_per, max(total_skyworth_hardware_profit/total_sales_volume, 0) if total_sales_volume>0 else 0,
+    avg_s_split_per, avg_r_royalty_per, avg_s_split_per, avg_c_card_per, avg_c_vip_discount_per, max(total_youduo_hardware_profit/total_sales_volume, 0) if total_sales_volume>0 else 0
 ]
 sankey_colors = [
     "#1f77b4", "#d62728", "#ff7f0e", "#2ca02c",
@@ -545,25 +584,24 @@ fig_sankey = go.Figure(go.Sankey(
         color=["rgba(214, 39, 40, 0.3)"]*13
     )
 ))
-# 【修改2】设置桑基图字体颜色为黑色
 fig_sankey.update_layout(
     title_text="加权平均单台产品资金流向拆解（单位：元）", 
     font_size=13, 
     height=600,
-    font=dict(color="black")  # 字体颜色改为黑色
+    font=dict(color="black")
 )
 st.plotly_chart(fig_sankey, use_container_width=True)
 
 # 各SKU销量与毛利明细
 st.divider()
-st.subheader("🎮 各SKU销量与毛利明细")
+st.subheader("🎮 各SKU销量与硬件毛利明细")
 col_sku1, col_sku2 = st.columns([1.2, 1])
 with col_sku1:
     st.dataframe(sku_summary_df, use_container_width=True, hide_index=True)
 with col_sku2:
-    # 【修改3】双数据饼图：各SKU销售金额和销售成本占比
+    # 双数据饼图：销售金额+销售成本
     if sku_sales_amount and sku_sales_cost:
-        # 准备数据
+        from plotly.subplots import make_subplots
         pie_df_amount = pd.DataFrame({
             "SKU": list(sku_sales_amount.keys()),
             "金额（万元）": [v/10000 for v in sku_sales_amount.values()],
@@ -574,26 +612,18 @@ with col_sku2:
             "金额（万元）": [v/10000 for v in sku_sales_cost.values()],
             "类型": "销售成本"
         })
-        
-        # 创建子图
-        from plotly.subplots import make_subplots
         fig_pie_dual = make_subplots(rows=1, cols=2, specs=[[{"type": "pie"}, {"type": "pie"}]],
                                      subplot_titles=("各SKU销售金额占比", "各SKU销售成本占比"))
-        
-        # 销售金额饼图
         fig_pie_dual.add_trace(
             go.Pie(labels=pie_df_amount["SKU"], values=pie_df_amount["金额（万元）"], 
                    name="销售金额", hole=0.4, domain=dict(x=[0, 0.45])),
             row=1, col=1
         )
-        
-        # 销售成本饼图
         fig_pie_dual.add_trace(
             go.Pie(labels=pie_df_cost["SKU"], values=pie_df_cost["金额（万元）"], 
                    name="销售成本", hole=0.4, domain=dict(x=[0.55, 1])),
             row=1, col=2
         )
-        
         fig_pie_dual.update_layout(height=400)
         st.plotly_chart(fig_pie_dual, use_container_width=True)
 
@@ -608,18 +638,22 @@ with col_channel2:
     fig_channel_pie = px.pie(channel_cost_df, values="总成本（万元）", names="渠道", title="各渠道成本占比", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
     st.plotly_chart(fig_channel_pie, use_container_width=True)
 
-# 双主体明细拆解
+# 双主体明细拆解（原有布局不变，新增续费收入行）
 st.divider()
 st.subheader("📋 双主体收入成本明细（万元）")
 col_detail1, col_detail2 = st.columns(2)
 with col_detail1:
     st.subheader("创维数字（销售主体）")
     skyworth_detail_df = pd.DataFrame({
-        "项目": ["硬件销售收入", "加：会员分成收入", "减：基础硬件总成本", "减：额外配件总成本", "减：渠道总成本", "减：支付创想版权费", "总毛利"],
+        "项目": ["硬件销售收入", "加：捆绑会员分成收入", "加：续费会员分成收入", "减：基础硬件总成本", "减：额外配件总成本", "减：渠道总成本", "减：支付创想版权费", "总毛利"],
         "金额（万元）": [
-            round(total_p_hw/10000,2), round(total_s_split/10000,2),
-            round(-total_c_hw_base/10000,2), round(-total_c_hw_extra/10000,2),
-            round(-total_channel_cost/10000,2), round(-total_r_royalty/10000,2),
+            round(total_p_hw/10000,2),
+            round(total_s_split/10000,2),
+            round(total_skyworth_renew_profit/10000,2),
+            round(-total_c_hw_base/10000,2),
+            round(-total_c_hw_extra/10000,2),
+            round(-total_channel_cost/10000,2),
+            round(-total_r_royalty/10000,2),
             round(total_skyworth_profit/10000,2)
         ]
     })
@@ -627,70 +661,75 @@ with col_detail1:
 with col_detail2:
     st.subheader("创想悦动（运营主体）")
     youduo_detail_df = pd.DataFrame({
-        "项目": ["软件服务总收入（会员+卡件）", "加：版权费收入", "减：支付创维会员分成", "减：卡件总成本", "减：赠送会员折价总成本", "总毛利"],
+        "项目": ["捆绑软件服务总收入（会员+卡件）", "加：硬件版权费收入", "加：续费会员服务收入", "减：支付创维会员分成", "减：卡件总成本", "减：赠送会员折价总成本", "总毛利"],
         "金额（万元）": [
-            round(total_p_sw/10000,2), round(total_r_royalty/10000,2),
-            round(-total_s_split/10000,2), round(-total_c_card/10000,2),
-            round(-total_c_vip_discount/10000,2), round(total_youduo_profit/10000,2)
+            round(total_p_sw/10000,2),
+            round(total_r_royalty/10000,2),
+            round(total_youduo_renew_profit/10000,2),
+            round(-(total_s_split + total_skyworth_renew_profit)/10000,2),
+            round(-total_c_card/10000,2),
+            round(-total_c_vip_discount/10000,2),
+            round(total_youduo_profit/10000,2)
         ]
     })
     st.dataframe(youduo_detail_df, use_container_width=True, hide_index=True)
 
-# 【修改4】新增：销量和硬件成本对双方毛利影响的两张图表
+# 敏感性分析图表（原有布局不变，自动包含续费收入）
 st.divider()
-st.subheader("📈 销量与硬件成本对毛利影响的敏感性分析")
+st.subheader("📈 销量与硬件成本对毛利影响的敏感性分析（含续费收入）")
 st.caption("基于当前参数，分析不同销量和硬件成本组合下，创维与创想的毛利变化趋势")
 
 # 准备敏感性分析数据
-# 定义变量范围
-hw_cost_range = np.linspace(base_hardware_cost - 100, base_hardware_cost + 100, 10)  # 硬件成本：当前±100元
-volume_levels = [50000, 100000, 200000, 300000, 500000]  # 不同销量档位
+hw_cost_range = np.linspace(base_hardware_cost - 100, base_hardware_cost + 100, 10)
+volume_levels = [50000, 100000, 200000, 300000, 500000]
 
-# 计算数据
 sensitivity_data = []
 for vol in volume_levels:
     for hw_cost in hw_cost_range:
-        # 简化计算：基于当前结构，仅改变硬件成本和总销量
-        # 计算单台毛利变化
-        skyworth_profit_per_simple = avg_p_hw_per + avg_s_split_per - hw_cost - avg_c_hw_extra_per - avg_channel_cost_per - royalty_fee
-        youduo_profit_per_simple = avg_p_sw_per + royalty_fee - avg_s_split_per - avg_c_card_per - avg_c_vip_discount_per
+        # 硬件毛利计算
+        skyworth_hw_profit_per = avg_p_hw_per + avg_s_split_per - hw_cost - avg_c_hw_extra_per - avg_channel_cost_per - royalty_fee
+        youduo_hw_profit_per = avg_p_sw_per + royalty_fee - avg_s_split_per - avg_c_card_per - avg_c_vip_discount_per
+        # 续费毛利计算
+        single_user_renew = (renew_rate / 100) * (
+            (year_card_renew_ratio / 100) * renew_vip_year_price
+            + (1 - year_card_renew_ratio/100) * renew_vip_month_price * 12
+        )
+        total_renew = vol * single_user_renew * renew_years
+        skyworth_renew = total_renew * vip_split_rate
+        youduo_renew = total_renew * (1 - vip_split_rate)
+        # 总毛利
+        skyworth_total = (skyworth_hw_profit_per * vol + skyworth_renew) / 10000
+        youduo_total = (youduo_hw_profit_per * vol + youduo_renew) / 10000
         
         sensitivity_data.append({
             "硬件成本（元）": hw_cost,
             "销量（台）": vol,
-            "创维总毛利（万元）": skyworth_profit_per_simple * vol / 10000,
-            "创想总毛利（万元）": youduo_profit_per_simple * vol / 10000
+            "创维总毛利（万元）": skyworth_total,
+            "创想总毛利（万元）": youduo_total
         })
 sensitivity_df = pd.DataFrame(sensitivity_data)
 
-# 图表1：双变量敏感性折线图
+# 双变量敏感性折线图
 col_chart1, col_chart2 = st.columns(2)
 with col_chart1:
     st.subheader("1. 双变量敏感性折线图")
     st.caption("X轴：硬件成本 | 不同颜色：不同销量 | 左Y轴：创维毛利 | 右Y轴：创想毛利")
-    
-    # 创建双轴折线图
     fig_line = go.Figure()
-    
-    # 为每个销量档位添加两条线
     colors = px.colors.qualitative.D3
     for i, vol in enumerate(volume_levels):
         df_sub = sensitivity_df[sensitivity_df["销量（台）"] == vol]
-        # 创维毛利（左轴）
         fig_line.add_trace(go.Scatter(
             x=df_sub["硬件成本（元）"], y=df_sub["创维总毛利（万元）"],
             name=f"创维-{vol/10000}万台",
             line=dict(color=colors[i], dash="solid"),
             yaxis="y"
         ))
-        # 创想毛利（右轴）
         fig_line.add_trace(go.Scatter(
             x=df_sub["硬件成本（元）"], y=df_sub["创想总毛利（万元）"],
             name=f"创想-{vol/10000}万台",
             line=dict(color=colors[i], dash="dot"),
             yaxis="y2"
         ))
-    
     fig_line.update_layout(
         xaxis_title="硬件成本（元）",
         yaxis=dict(title="创维总毛利（万元）", side="left"),
@@ -700,16 +739,15 @@ with col_chart1:
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-# 图表2：等高线热力图（创维）
+# 等高线热力图（创维）
 with col_chart2:
     st.subheader("2. 等高线热力图（创维数字）")
     st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：创维毛利高低（绿=赚，红=亏）")
-    
     fig_contour_skyworth = go.Figure(data=go.Contour(
         z=sensitivity_df["创维总毛利（万元）"],
         x=sensitivity_df["硬件成本（元）"],
         y=sensitivity_df["销量（台）"],
-        colorscale="RdYlGn",  # 红-黄-绿
+        colorscale="RdYlGn",
         colorbar=dict(title="创维总毛利（万元）"),
         contours=dict(showlabels=True)
     ))
@@ -720,17 +758,16 @@ with col_chart2:
     )
     st.plotly_chart(fig_contour_skyworth, use_container_width=True)
 
-# 图表3：等高线热力图（创想）
+# 等高线热力图（创想）
 col_chart3, _ = st.columns(2)
 with col_chart3:
     st.subheader("3. 等高线热力图（创想悦动）")
     st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：创想毛利高低（绿=赚，红=亏）")
-    
     fig_contour_youduo = go.Figure(data=go.Contour(
         z=sensitivity_df["创想总毛利（万元）"],
         x=sensitivity_df["硬件成本（元）"],
         y=sensitivity_df["销量（台）"],
-        colorscale="RdYlGn",  # 红-黄-绿
+        colorscale="RdYlGn",
         colorbar=dict(title="创想总毛利（万元）"),
         contours=dict(showlabels=True)
     ))
