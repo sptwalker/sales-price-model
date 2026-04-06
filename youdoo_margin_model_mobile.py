@@ -680,12 +680,12 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
     content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
     content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元  |  综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
     # 毛利指标行（带颜色数字）
-    sky_color = (0, 150, 70) if total_skyworth_profit >= 0 else (200, 50, 50)
-    you_color = (0, 150, 70) if total_youduo_profit >= 0 else (200, 50, 50)
-    tot_color = (0, 150, 70) if total_profit >= 0 else (200, 50, 50)
-    content_rows.append({"type": "content_mv", "label": "创维数字总毛利", "value": f"¥{round(total_skyworth_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万  续费 {round(total_skyworth_renew_profit/10000, 1)}万", "value_color": sky_color, "bg_color": "white"})
-    content_rows.append({"type": "content_mv", "label": "创想悦动总毛利", "value": f"¥{round(total_youduo_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万  续费 {round(total_youduo_renew_profit/10000, 1)}万", "value_color": you_color, "bg_color": "#F0F8FF"})
-    content_rows.append({"type": "content_mv", "label": "产品总毛利", "value": f"¥{round(total_profit/10000, 1)} 万元", "delta": f"综合毛利率 {total_margin_rate}%", "value_color": tot_color, "bg_color": "white"})
+    sky_color = "#009944" if total_skyworth_profit >= 0 else "#C83232"
+    you_color = "#009944" if total_youduo_profit >= 0 else "#C83232"
+    tot_color = "#009944" if total_profit >= 0 else "#C83232"
+    content_rows.append({"type": "content_mv", "label": "创维数字总毛利", "value": f"¥{round(total_skyworth_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_skyworth_hardware_profit/10000, 1)}万  续费 {round(total_skyworth_renew_profit/10000, 1)}万", "value_color": sky_color, "delta_color": "#555555", "bg_color": "white"})
+    content_rows.append({"type": "content_mv", "label": "创想悦动总毛利", "value": f"¥{round(total_youduo_profit/10000, 1)} 万元", "delta": f"硬件 {round(total_youduo_hardware_profit/10000, 1)}万  续费 {round(total_youduo_renew_profit/10000, 1)}万", "value_color": you_color, "delta_color": "#555555", "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content_mv", "label": "产品总毛利", "value": f"¥{round(total_profit/10000, 1)} 万元", "delta": f"综合毛利率 {total_margin_rate}%", "value_color": tot_color, "delta_color": "#555555", "bg_color": "white"})
     
     # 区块2：各套装定价方案
     content_rows.append({"type": "title", "text": "📦 各套装定价方案", "bg_color": "#27AE60", "text_color": "white"})
@@ -821,6 +821,7 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
             value_text = row["value"]
             delta_text = row.get("delta", "")
             value_color = row.get("value_color", "#000000")
+            delta_color = row.get("delta_color", "#555555")
             content_w = img_width - 2 * margin - 30  # 可用宽度
 
             draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
@@ -844,7 +845,7 @@ def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
             # 小字（右侧，黑色）
             if delta_text:
                 delta_x = value_x + value_w + 20
-                draw.text((delta_x, current_y + pad_y), delta_text, font=font_content, fill="#555555")
+                draw.text((delta_x, current_y + pad_y), delta_text, font=font_content, fill=delta_color)
 
             current_y += rh
 
