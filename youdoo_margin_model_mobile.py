@@ -3,6 +3,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+from datetime import datetime
+import io
 
 # ============================================================
 # 页面配置 - 手机版
@@ -575,15 +580,173 @@ with c_d2:
     })
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
-# --- 保存方案 ---
+# --- 保存方案：生成信息图 ---
 st.divider()
-c_save, _ = st.columns([1, 3])
-with c_save:
-    if st.button("💾 保存当前方案", type="primary", use_container_width=True):
-        st.session_state["show_plan_report"] = not st.session_state.get("show_plan_report", False)
+st.subheader("💾 保存当前方案")
 
-if st.session_state.get("show_plan_report", False):
-    from datetime import datetime
+if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    st.success(f"✅ 方案保存成功！时间：{now}")
-    st.info("💡 PC端模型支持完整HTML报告下载，手机端建议截图保存当前页面。")
+
+    # 设置中文字体
+    plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    fig, axes = plt.subplots(4, 1, figsize=(10, 22))
+    fig.patch,facecolor='#F8F9FA'
+
+    # ── 图1：核心指标 ──
+    ax1 = axes[0]
+    ax1.set_facecolor('#FFFFFF')
+    ax1.axis('off')
+    ax1.set_title("📊 核心指标", fontsize=14, fontweight='bold', pad=10)
+
+    # 构建指标表格数据
+    metrics_data = [
+        ["全渠道总销售额", f"¥{round(total_revenue/10000, 1)} 万元"],
+        ["全渠道总销量", f"{total_sales_volume:,} 台"],
+        ["单台均价", f"¥{round(avg_price_per, 0)} 元"],
+        ["渠道综合成本", f"{round(total_channel_cost/10000, 1)} 万元"],
+        ["渠道综合费率", f"{round(avg_channel_rate, 2)}%"],
+        ["创维数字总毛利", f"{round(total_skyworth_profit/10000, 1)} 万元"],
+        ["创想悦动总毛利", f"{round(total_youduo_profit/10000, 1)} 万元"],
+        ["产品总毛利", f"{round(total_profit/10000, 1)} 万元 | 毛利率 {total_margin_rate}%"],
+    ]
+    tbl1 = ax1.table(cellText=metrics_data, colLabels=["指标", "数值"],
+                     loc='center', cellLoc='center',
+                     colColours=['#4A90D9', '#4A90D9'],
+                     colWidths=[0.4, 0.6])
+    tbl1.auto_set_font_size(False)
+    tbl1.set_fontsize(10)
+    tbl1.scale(1, 1.8)
+    for (r, c), cell in tbl1.get_celld().items():
+        if c == 0:
+            cell.set_text_props(fontweight='bold')
+        if r % 2 == 0:
+            cell.set_facecolor('#F0F8FF')
+
+    # ── 图2：套装价格表 ──
+    ax2 = axes[1]
+    ax2.set_facecolor('#FFFFFF')
+    ax2.axis('off')
+    ax2.set_title("📦 套装价格", fontsize=14, fontweight='bold', pad=10)
+    price_data = [
+        ["标准版", f"指导价 ¥{std_guide_price}", f"大促价 ¥{std_promo_price}"],
+        ["家庭版", f"指导价 ¥{fam_guide_price}", f"大促价 ¥{fam_promo_price}"],
+        ["豪华版", f"指导价 ¥{lux_guide_price}", f"大促价 ¥{lux_promo_price}"],
+    ]
+    tbl2 = ax2.table(cellText=price_data, colLabels=["SKU版本", "官方指导价", "大促价"],
+                     loc='center', cellLoc='center',
+                     colColours=['#27AE60', '#27AE60', '#27AE60'],
+                     colWidths=[0.25, 0.375, 0.375])
+    tbl2.auto_set_font_size(False)
+    tbl2.set_fontsize(10)
+    tbl2.scale(1, 1.8)
+    for (r, c), cell in tbl2.get_celld().items():
+        if c == 0:
+            cell.set_text_props(fontweight='bold')
+        if r % 2 == 0:
+            cell.set_facecolor('#F0FFF4')
+
+    # ── 图3：各SKU赠品配置表 ──
+    ax3 = axes[2]
+    ax3.set_facecolor('#FFFFFF')
+    ax3.axis('off')
+    ax3.set_title("🎁 各SKU赠品/配件配置", fontsize=14, fontweight='bold', pad=10)
+    gift_data = []
+    for sku_name in sku_list:
+        sc = sku_base_config[sku_name]
+        gift_data.append([
+            sku_name,
+            f"遥控器×{sc['default_extra_remote']}",
+            f"光枪×{sc['default_light_gun']}",
+            f"月卡×{sc['default_vip_month']} 年卡×{sc['default_vip_year']}",
+            f"家长卡×{sc['default_parent_card']}",
+            f"NFC×{sc['default_nfc_full']} SSR×{sc['default_nfc_ssr']}",
+        ])
+    tbl3 = ax3.table(cellText=gift_data,
+                     colLabels=["SKU", "额外遥控器", "光枪", "VIP卡", "家长钥匙卡", "NFC卡"],
+                     loc='center', cellLoc='center',
+                     colColours=['#F39C12'] * 6,
+                     colWidths=[0.15, 0.17, 0.13, 0.22, 0.16, 0.17])
+    tbl3.auto_set_font_size(False)
+    tbl3.set_fontsize(9)
+    tbl3.scale(1, 1.8)
+    for (r, c), cell in tbl3.get_celld().items():
+        if c == 0:
+            cell.set_text_props(fontweight='bold')
+        if r % 2 == 0:
+            cell.set_facecolor('#FFFBF0')
+
+    # ── 图4：渠道 & 会员 & 版权金等参数 ──
+    ax4 = axes[3]
+    ax4.set_facecolor('#FFFFFF')
+    ax4.axis('off')
+    ax4.set_title("💰 渠道·会员·版权金参数", fontsize=14, fontweight='bold', pad=10)
+
+    # 左：渠道参数
+    channel_data = []
+    for ch in all_channel:
+        channel_data.append([
+            ch,
+            f"{channel_rate_config[ch]}%",
+            f"{channel_volume_dict[ch]:,}台"
+        ])
+    tbl4a = ax4.table(cellText=channel_data, colLabels=["渠道", "费率", "销量"],
+                       loc='left', cellLoc='center',
+                       colColours=['#9B59B6'] * 3,
+                       bbox=[0.0, 0.55, 0.5, 0.42])
+    tbl4a.auto_set_font_size(False)
+    tbl4a.set_fontsize(9)
+    tbl4a.scale(1, 1.6)
+    for (r, c), cell in tbl4a.get_celld().items():
+        if c == 0:
+            cell.set_text_props(fontweight='bold')
+        if r % 2 == 0:
+            cell.set_facecolor('#F5F0FF')
+
+    # 右：会员 & 其他参数
+    other_data = [
+        ["续费年卡价格", f"¥{renew_vip_year_price}"],
+        ["续费月卡价格", f"¥{renew_vip_month_price}"],
+        ["会员续费率", f"{renew_rate}%"],
+        ["年卡续费占比", f"{year_card_renew_ratio}%"],
+        ["单台版权费", f"¥{royalty_fee}"],
+        ["创维分成比例", f"{vip_split_rate_pct}%"],
+        ["折价计提比例", f"{vip_discount_rate_pct}%"],
+        ["基础硬件成本", f"¥{base_hardware_cost}"],
+    ]
+    tbl4b = ax4.table(cellText=other_data, colLabels=["参数", "数值"],
+                       loc='right', cellLoc='center',
+                       colColours=['#E74C3C'] * 2,
+                       bbox=[0.5, 0.55, 0.5, 0.42])
+    tbl4b.auto_set_font_size(False)
+    tbl4b.set_fontsize(9)
+    tbl4b.scale(1, 1.6)
+    for (r, c), cell in tbl4b.get_celld().items():
+        if c == 0:
+            cell.set_text_props(fontweight='bold')
+        if r % 2 == 0:
+            cell.set_facecolor('#FFF0F0')
+
+    # 底部补充：版本信息
+    ax4.text(0.5, 0.02,
+             f"YOUDOO BOX 毛利测算模型 V6.6 手机版 | 生成时间：{now}",
+             ha='center', va='bottom', fontsize=8, color='#999999')
+
+    plt.tight_layout(pad=2.0)
+
+    # 保存为 BytesIO
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                facecolor='#F8F9FA')
+    buf.seek(0)
+    plt.close()
+
+    st.success("✅ 方案信息图已生成！")
+    st.download_button(
+        label="📥 点击下载方案图片",
+        data=buf,
+        file_name=f"YOUDOO_方案_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+        mime="image/png",
+        use_container_width=True
+    )
