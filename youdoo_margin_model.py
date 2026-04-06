@@ -513,31 +513,31 @@ with col1:
 with col2:
     st.metric("渠道综合成本", f"{round(total_channel_cost/10000,2)} 万元", f"单台平均 {round(avg_channel_cost_per,2)} 元")
 with col3:
-    skyworth_color = "green" if total_skyworth_profit >= 0 else "red"
+    skyworth_color = "#27ae60" if total_skyworth_profit >= 0 else "#e74c3c"
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
-        <p style="margin:0; font-size:14px; color:#555;">创维数字总毛利</p>
+        <p style="margin:0; font-size:14px; color:#000;">创维数字总毛利</p>
         <h3 style="margin:5px 0; color:{skyworth_color};">{round(total_skyworth_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">硬件：{round(total_skyworth_hardware_profit/10000,2)}万 | 续费：{round(total_skyworth_renew_profit/10000,2)}万</p>
+        <p style="margin:0; font-size:12px; color:#000;">硬件：{round(total_skyworth_hardware_profit/10000,2)}万 | 续费：{round(total_skyworth_renew_profit/10000,2)}万</p>
     </div>
     """, unsafe_allow_html=True)
 with col4:
-    youduo_color = "green" if total_youduo_profit >= 0 else "red"
+    youduo_color = "#27ae60" if total_youduo_profit >= 0 else "#e74c3c"
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
-        <p style="margin:0; font-size:14px; color:#555;">创想悦动总毛利</p>
+        <p style="margin:0; font-size:14px; color:#000;">创想悦动总毛利</p>
         <h3 style="margin:5px 0; color:{youduo_color};">{round(total_youduo_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">硬件：{round(total_youduo_hardware_profit/10000,2)}万 | 续费：{round(total_youduo_renew_profit/10000,2)}万</p>
+        <p style="margin:0; font-size:12px; color:#000;">硬件：{round(total_youduo_hardware_profit/10000,2)}万 | 续费：{round(total_youduo_renew_profit/10000,2)}万</p>
     </div>
     """, unsafe_allow_html=True)
 with col5:
-    total_color = "green" if total_profit >= 0 else "red"
+    total_color = "#27ae60" if total_profit >= 0 else "#e74c3c"
     total_margin_rate = round(total_profit / (total_revenue + total_renew_revenue) * 100, 2) if (total_revenue + total_renew_revenue) >0 else 0
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
-        <p style="margin:0; font-size:14px; color:#555;">产品总毛利</p>
+        <p style="margin:0; font-size:14px; color:#000;">产品总毛利</p>
         <h3 style="margin:5px 0; color:{total_color};">{round(total_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">综合毛利率 {total_margin_rate}%</p>
+        <p style="margin:0; font-size:12px; color:#000;">综合毛利率 {total_margin_rate}%</p>
     </div>
     """, unsafe_allow_html=True)
 
