@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
 import io
+import random
 
 # ============================================================
 # 页面配置 - 手机版
@@ -14,6 +15,14 @@ st.set_page_config(
     layout="centered",
     page_icon="🎮"
 )
+
+# ============================================================
+# 随机方案名预设（水果+动物）
+# ============================================================
+SCHEME_NAME_LIST = [
+    "草莓", "芒果", "蓝莓", "橙子", "蜜桃", "葡萄", "荔枝", "西瓜",
+    "熊猫", "考拉", "小鹿", "松鼠", "兔子", "狐狸", "企鹅", "海豚"
+]
 
 # ============================================================
 # 0. Session State 初始化
@@ -577,197 +586,162 @@ with c_d2:
     })
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
-# --- 保存方案：生成单张信息图 ---
+# ============================================================
+# 【核心修改】方案信息图生成模块（完全按你的要求优化）
+# ============================================================
 st.divider()
 st.subheader("💾 保存当前方案")
 
 if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
+    # 1. 随机生成方案名
+    scheme_name = random.choice(SCHEME_NAME_LIST)
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    # 构建单张统一表格：合并所有区块，用 colspan 分隔行区分各区
-    # 格式：[标签列, 列2, 列3, ...]
-
-    # ── Section 1: 核心指标 ──
-    rows_col1 = ["全渠道总销售额", "全渠道总销量", "单台均价", "渠道综合成本",
-                 "渠道综合费率", "创维数字总毛利", "创想悦动总毛利", "产品总毛利", "综合毛利率"]
-    rows_col2 = [f"¥{round(total_revenue/10000,1)} 万元", f"{total_sales_volume:,} 台",
-                 f"¥{round(avg_price_per,0)} 元", f"¥{round(total_channel_cost/10000,1)} 万元",
-                 f"{round(avg_channel_rate,2)}%", f"¥{round(total_skyworth_profit/10000,1)} 万元",
-                 f"¥{round(total_youduo_profit/10000,1)} 万元", f"¥{round(total_profit/10000,1)} 万元",
-                 f"{total_margin_rate}%"]
-
-    # ── Section 2: 套装价格 ──
-    sec2_col1 = ["", "", ""]
-    sec2_col2 = ["标准版", "家庭版", "豪华版"]
-    sec2_col3 = [f"¥{std_guide_price}", f"¥{fam_guide_price}", f"¥{lux_guide_price}"]
-    sec2_col4 = [f"¥{std_promo_price}", f"¥{fam_promo_price}", f"¥{lux_promo_price}"]
-
-    # ── Section 3: SKU赠品配置 ──
-    sec3_col1, sec3_col2, sec3_col3, sec3_col4, sec3_col5, sec3_col6 = [], [], [], [], [], []
-    for sku_name in sku_list:
-        sc = sku_base_config[sku_name]
-        sec3_col1.append(sku_name)
-        sec3_col2.append(str(sc["default_extra_remote"]))
-        sec3_col3.append(str(sc["default_light_gun"]))
-        sec3_col4.append(f"月卡{sc['default_vip_month']}/年卡{sc['default_vip_year']}")
-        sec3_col5.append(str(sc["default_parent_card"]))
-        sec3_col6.append(f"全套{sc['default_nfc_full']}/SSR{sc['default_nfc_ssr']}")
-
-    # ── Section 4: 渠道参数 ──
-    sec4_col1, sec4_col2, sec4_col3 = [], [], []
-    for ch in all_ch:
-        sec4_col1.append(ch)
-        sec4_col2.append(f"{channel_rate_config[ch]}%")
-        sec4_col3.append(f"{channel_volume_dict[ch]:,}台")
-
-    # ── Section 5: 会员·版权金·其他 ──
-    sec5_col1 = ["续费年卡价格", "续费月卡价格", "会员续费率", "年卡续费占比",
-                  "单台版权费", "创维分成比例", "折价计提比例", "基础硬件成本"]
-    sec5_col2 = [f"¥{renew_vip_year_price}", f"¥{renew_vip_month_price}", f"{renew_rate}%",
-                  f"{year_card_renew_ratio}%", f"¥{royalty_fee}", f"{vip_split_rate_pct}%",
-                  f"{vip_discount_rate_pct}%", f"¥{base_hardware_cost}"]
-
-    # ── 构建统一表格 ──
-    # 背景色数组：按区块着色
-    BG_COLORS = (
-        ["#4A90D9"] * 9 +          # 核心指标 蓝
-        ["#27AE60"] * 4 +           # 价格表 绿
-        ["#F39C12"] * 7 +           # SKU赠品 橙（1标题+3SKU+3占位）
-        ["#9B59B6"] * 4 +           # 渠道参数 紫
-        ["#E74C3C"] * 9             # 会员·版权金 红
-    )
-
-    all_values = [
-        rows_col1 + ["", "", ""] + sec3_col1 + [""] * 4 + sec4_col1 + [""] * 9 + sec5_col1,
-        rows_col2 + sec2_col2 + sec2_col3 + sec2_col4 + sec3_col2 + sec3_col3 + sec3_col4 + sec3_col5 + sec3_col6 + sec4_col2 + sec4_col3 + sec5_col2,
-    ]
-
-    # 计算每行背景（交替色 + 区块色）
-    fill_colors = []
-    # 核心指标 9行
-    for i in range(9):
-        fill_colors.append(["#E8F4FD", "white"])
-    # 价格分隔行（1行section标题 + 3数据行）
-    fill_colors.append(["#27AE60", "#27AE60"])  # section header
-    for i in range(3):
-        fill_colors.append(["#E8F8EE", "white"])
-    # SKU赠品（1标题 + 3数据）
-    fill_colors.append(["#F39C12", "#F39C12"])  # section header
-    for i in range(3):
-        fill_colors.append(["#FFF8E8", "white"])
-    # 渠道（1标题 + 4数据）
-    fill_colors.append(["#9B59B6", "#9B59B6"])
-    for i in range(4):
-        fill_colors.append(["#F0EBF8", "white"])
-    # 会员参数（1标题 + 8数据）
-    fill_colors.append(["#E74C3C", "#E74C3C"])
-    for i in range(8):
-        fill_colors.append(["#FEF0F0", "white"])
-
-    # 计算每个section的列宽（用于对齐）
-    # 我们用2列表格，但某些行需要视觉上看起来像多列表格
-    # 通过字体颜色/内容来区分
-
-    fig = go.Figure()
-
-    # Section header行用fill_color覆盖
-    # Plotly Table一次渲染，需要用cells.align控制对齐
-    header_vals = [["📊 核心指标", ""], ["📦 套装价格", ""], ["🎁 SKU赠品配置", ""], ["💰 渠道参数", ""], ["📋 会员·版权金·其他参数", ""]]
-
-    # 构建合并单元格效果：用 column-span 实现分组表头
-    # Plotly 不原生支持跨列合并，用 align=merge 无效
-    # 改用：每个区块用独立subplot行
-
-    # ── 方法：5个区块，每个区块用独立的 layout annotations + table ──
-    # 不，这样还是多图
-    #
-    # ── 最简方案：把所有数据放进一张表，用 SPAN 实现合并单元格 ──
-
-    # 分组表头行（colspan=3 的合并效果，每行2列但显示时占满）
-    # Plotly table 不支持 colspan，只支持行内对齐
-    # 最终方案：把section标题作为一行数据，其背景色突出，内容跨列显示
-
-    # 构建完整的单表数据
-    # 列1: 区块/标签  列2: 数据（价格表则拆成2列）
-
-    # 最优解：6列表格
-    # col1=标签/col2-col3=价格表/col4-col6=SKU赠品
-    # 但这样数据对齐会很复杂
-
-    # ── 最终方案：2列表格 + 区块分隔标题行 ──
-    # 通过每行的col1内容包含区块名来区分不同section
-
-    # 简化版：单表2列，区块标题行特殊着色
-    row_labels = (
-        ["━━━ 📊 核心指标 ━━━"] + rows_col1 +
-        ["━━━ 📦 套装价格 ━━━"] +
-        ["标准版", "家庭版", "豪华版"] +
-        ["━━━ 🎁 SKU赠品配置 ━━━"] +
-        sec3_col1 +
-        ["━━━ 💰 渠道参数 ━━━"] +
-        sec4_col1 +
-        ["━━━ 📋 会员·版权金 ━━━"] +
-        sec5_col1
-    )
-    row_values = (
-        ["", ""] +
-        rows_col2 +
-        [f"指导价 ¥{std_guide_price}", f"指导价 ¥{fam_guide_price}", f"指导价 ¥{lux_guide_price}"] +
-        [f"大促价 ¥{std_promo_price}", f"大促价 ¥{fam_promo_price}", f"大促价 ¥{lux_promo_price}"] +
-        [f"遥控×{sc['default_extra_remote']}" for sc in [sku_base_config[s] for s in sku_list]] +
-        [f"光枪×{sc['default_light_gun']}" for sc in [sku_base_config[s] for s in sku_list]] +
-        [f"月卡{sku_base_config[s]['default_vip_month']}/年卡{sku_base_config[s]['default_vip_year']}" for s in sku_list] +
-        [f"家长卡×{sku_base_config[s]['default_parent_card']}" for s in sku_list] +
-        [f"NFC×{sku_base_config[s]['default_nfc_full']}/SSR×{sku_base_config[s]['default_nfc_ssr']}" for s in sku_list] +
-        [f"{channel_rate_config[ch]}%  {channel_volume_dict[ch]:,}台" for ch in all_ch] +
-        sec5_col2
-    )
-
-    # section header 行的背景
-    SECTION_BG = {
-        "━━━ 📊 核心指标 ━━━": "#4A90D9",
-        "━━━ 📦 套装价格 ━━━": "#27AE60",
-        "━━━ 🎁 SKU赠品配置 ━━━": "#F39C12",
-        "━━━ 💰 渠道参数 ━━━": "#9B59B6",
-        "━━━ 📋 会员·版权金 ━━━": "#E74C3C",
-    }
+    
+    # 2. 构建信息图数据行
+    row_labels = []
+    row_values = []
+    cell_colors = []
     alt_bg = ["#F0F8FF", "white"]
     alt_idx = 0
-    cell_colors = []
-    for label in row_labels:
-        if label in SECTION_BG:
-            cell_colors.append([SECTION_BG[label], SECTION_BG[label]])
-            alt_idx = 0
-        else:
-            cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
-            alt_idx += 1
 
+    # --- 区块1：预设销售目标（蓝色背景）---
+    row_labels.append("━━━ 📊 预设销售目标 ━━━")
+    row_values.append("")
+    cell_colors.append(["#4A90D9", "#4A90D9"])
+    alt_idx = 0
+
+    # 区块1内容
+    target_items = [
+        ("全渠道总销售额", f"¥{round(total_revenue/10000, 1)} 万元"),
+        ("全渠道总销量", f"{total_sales_volume:,} 台 | 单台均价 ¥{round(avg_price_per, 0)}"),
+        ("渠道综合成本", f"¥{round(total_channel_cost/10000, 1)} 万元 | 综合费率 {round(avg_channel_rate, 2)}%"),
+        ("产品总毛利", f"¥{round(total_profit/10000, 1)} 万元 | 综合毛利率 {total_margin_rate}%")
+    ]
+    for label, val in target_items:
+        row_labels.append(label)
+        row_values.append(val)
+        cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
+        alt_idx += 1
+
+    # --- 区块2：各套装定价方案（绿色背景）---
+    row_labels.append("━━━ 📦 各套装定价方案 ━━━")
+    row_values.append("")
+    cell_colors.append(["#27AE60", "#27AE60"])
+    alt_idx = 0
+
+    # 区块2内容
+    price_items = [
+        ("标准版", f"官方指导价 ¥{std_guide_price} | 大促价 ¥{std_promo_price}"),
+        ("家庭版", f"官方指导价 ¥{fam_guide_price} | 大促价 ¥{fam_promo_price}"),
+        ("豪华版", f"官方指导价 ¥{lux_guide_price} | 大促价 ¥{lux_promo_price}")
+    ]
+    for label, val in price_items:
+        row_labels.append(label)
+        row_values.append(val)
+        cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
+        alt_idx += 1
+
+    # --- 区块3：各SKU详细配置方案（橙色背景）---
+    row_labels.append("━━━ 🎁 各SKU详细配置方案 ━━━")
+    row_values.append("")
+    cell_colors.append(["#F39C12", "#F39C12"])
+    alt_idx = 0
+
+    # 区块3内容
+    for sku_name in sku_list:
+        sc = sku_base_config[sku_name]
+        config_text = f"遥控×{sc['default_extra_remote']} | 光枪×{sc['default_light_gun']} | 月卡×{sc['default_vip_month']}/年卡×{sc['default_vip_year']} | 家长卡×{sc['default_parent_card']} | NFC全套×{sc['default_nfc_full']}/SSR×{sc['default_nfc_ssr']}"
+        row_labels.append(sku_name)
+        row_values.append(config_text)
+        cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
+        alt_idx += 1
+
+    # --- 区块4：会员价格方案（紫色背景）---
+    row_labels.append("━━━ 📋 会员价格方案 ━━━")
+    row_values.append("")
+    cell_colors.append(["#9B59B6", "#9B59B6"])
+    alt_idx = 0
+
+    # 区块4内容
+    vip_items = [
+        ("会员年卡价格", f"¥{renew_vip_year_price}"),
+        ("会员月卡价格", f"¥{renew_vip_month_price}")
+    ]
+    for label, val in vip_items:
+        row_labels.append(label)
+        row_values.append(val)
+        cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
+        alt_idx += 1
+
+    # --- 区块5：详细销售参数设定（灰色小字）---
+    row_labels.append("━━━ 🔍 详细销售参数设定 ━━━")
+    row_values.append("")
+    cell_colors.append(["#888888", "#888888"])
+    alt_idx = 0
+
+    # 区块5内容（灰色小字）
+    detail_items = [
+        ("渠道参数", f"京东：{channel_rate_config['京东']}%/{channel_volume_dict['京东']:,}台 | 天猫：{channel_rate_config['天猫']}%/{channel_volume_dict['天猫']:,}台 | 抖音：{channel_rate_config['抖音']}%/{channel_volume_dict['抖音']:,}台 | 线下：{channel_rate_config['线下']}%/{channel_volume_dict['线下']:,}台"),
+        ("硬件参数", f"基础硬件成本 ¥{base_hardware_cost} | 单台版权费 ¥{royalty_fee}"),
+        ("会员参数", f"会员续费率 {renew_rate}% | 年卡续费占比 {year_card_renew_ratio}% | 创维分成比例 {vip_split_rate_pct}% | 赠送会员折价比例 {vip_discount_rate_pct}%")
+    ]
+    for label, val in detail_items:
+        row_labels.append(label)
+        row_values.append(val)
+        cell_colors.append(["#F5F5F5", "#F5F5F5"])
+        alt_idx += 1
+
+    # 3. 生成竖屏信息图
+    fig = go.Figure()
+
+    # 表格字体颜色配置
+    font_colors = []
+    for color_pair in cell_colors:
+        if color_pair[0] in ["#4A90D9", "#27AE60", "#F39C12", "#9B59B6", "#888888"]:
+            font_colors.append(["white", "white"])
+        else:
+            font_colors.append(["#333333", "#333333"])
+
+    # 表格字体大小配置
+    font_sizes = []
+    for label in row_labels:
+        if "━━━" in label:
+            font_sizes.append([14, 14])
+        elif "详细销售参数设定" in label:
+            font_sizes.append([10, 10])
+        else:
+            font_sizes.append([12, 12])
+
+    # 渲染表格
     fig.add_trace(go.Table(
         header=dict(
-            values=["<b>YOUDOO BOX 毛利测算方案报告</b>", ""],
+            values=[f"<b>YOUDOO BOX售价测算方案（{scheme_name}版）</b>", ""],
             fill_color="#2C3E50",
-            font=dict(size=15, color="white"),
+            font=dict(size=16, color="white"),
             align="center",
-            height=40
+            height=50
         ),
         cells=dict(
             values=[row_labels, row_values],
             fill_color=cell_colors,
-            font=dict(size=12, color=["white" if c[0] in SECTION_BG.values() else "#333" for c in cell_colors]),
+            font=dict(color=font_colors, size=font_sizes),
             align="left",
-            height=32
+            height=36
         )
     ))
 
+    # 竖屏适配配置
     fig.update_layout(
         title=dict(
             text=f"<span style='font-size:12px;color:#888'>生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</span>",
-            x=0.5, xanchor="center", font_size=14
+            x=0.5, xanchor="center", font_size=12
         ),
-        height=1200,
+        width=720,  # 手机竖屏宽度
+        height=1600, # 手机竖屏高度
         margin=dict(l=20, r=20, t=60, b=30),
         dragmode=False
     )
 
-    st.success("✅ 方案信息图已生成！右键图片 → 「图片另存为」可保存为 PNG。")
+    # 4. 手机端提示语
+    st.success("✅ 方案信息图已生成！长按图片可以选择保存图片到手机相册")
     st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
