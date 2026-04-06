@@ -5,12 +5,12 @@ import plotly.graph_objects as go
 import numpy as np
 
 # 页面配置
-st.set_page_config(page_title="YOUDOO BOX 毛利测算模型 V6.1", layout="wide", page_icon="🎮")
-st.title("🎮 YOUDOO BOX 产品毛利测算财务模型 V6.1")
-st.caption("价格位置还原 | SKU占比全联动归一化 | 渠道成本独立设置 | 完美滑块联动")
+st.set_page_config(page_title="YOUDOO BOX 毛利测算模型 V6.2", layout="wide", page_icon="🎮")
+st.title("🎮 YOUDOO BOX 产品毛利测算财务模型 V6.2")
+st.caption("默认值调整 | 桑基图字体优化 | 双数据饼图 | 新增双变量敏感性分析")
 
 # -------------------------- 0. Session State 全量初始化 --------------------------
-# 渠道占比初始化（完美联动：总和永远100%）
+# 渠道占比初始化
 if "jd_ratio" not in st.session_state:
     st.session_state.jd_ratio = 15
 if "tmall_ratio" not in st.session_state:
@@ -20,15 +20,15 @@ if "douyin_ratio" not in st.session_state:
 if "offline_ratio" not in st.session_state:
     st.session_state.offline_ratio = 50
 
-# 【修复2】SKU销量占比初始化（全联动自动归一化）
+# 【修改1】线下SKU占比默认值调整：家庭版80%，豪华版20%
 if "online_standard_ratio" not in st.session_state:
     st.session_state.online_standard_ratio = 60
 if "online_family_ratio" not in st.session_state:
     st.session_state.online_family_ratio = 40
 if "offline_family_ratio" not in st.session_state:
-    st.session_state.offline_family_ratio = 60
+    st.session_state.offline_family_ratio = 80  # 默认80%
 if "offline_luxury_ratio" not in st.session_state:
-    st.session_state.offline_luxury_ratio = 40
+    st.session_state.offline_luxury_ratio = 20  # 默认20%
 
 # 套装价格初始化
 if "std_guide" not in st.session_state:
@@ -44,7 +44,7 @@ if "lux_guide" not in st.session_state:
 if "lux_promo" not in st.session_state:
     st.session_state.lux_promo = 2699
 
-# 渠道成本费率初始化（独立设置）
+# 渠道成本费率初始化
 if "jd_rate_early" not in st.session_state:
     st.session_state.jd_rate_early = 40
 if "jd_rate_late" not in st.session_state:
@@ -62,7 +62,7 @@ if "offline_rate_early" not in st.session_state:
 if "offline_rate_late" not in st.session_state:
     st.session_state.offline_rate_late = 30
 
-# -------------------------- 回调函数：全滑块联动归一化 --------------------------
+# -------------------------- 回调函数 --------------------------
 # 渠道占比联动回调
 def on_channel_change(changed_key):
     jd = st.session_state.jd_ratio
@@ -87,27 +87,25 @@ def on_channel_change(changed_key):
             ratio = st.session_state[k] / other_total
             st.session_state[k] = max(0, min(100, st.session_state[k] - delta * ratio))
 
-# 【修复2】线上SKU占比联动回调（标准版/家庭版，总和永远100%）
+# 线上SKU占比联动回调
 def on_online_sku_change(changed_key):
     if changed_key == "online_standard_ratio":
         st.session_state.online_family_ratio = 100 - st.session_state.online_standard_ratio
     else:
         st.session_state.online_standard_ratio = 100 - st.session_state.online_family_ratio
-    # 范围限制
     st.session_state.online_standard_ratio = max(0, min(100, st.session_state.online_standard_ratio))
     st.session_state.online_family_ratio = max(0, min(100, st.session_state.online_family_ratio))
 
-# 【修复2】线下SKU占比联动回调（家庭版/豪华版，总和永远100%）
+# 线下SKU占比联动回调
 def on_offline_sku_change(changed_key):
     if changed_key == "offline_family_ratio":
         st.session_state.offline_luxury_ratio = 100 - st.session_state.offline_family_ratio
     else:
         st.session_state.offline_family_ratio = 100 - st.session_state.offline_luxury_ratio
-    # 范围限制
     st.session_state.offline_family_ratio = max(0, min(100, st.session_state.offline_family_ratio))
     st.session_state.offline_luxury_ratio = max(0, min(100, st.session_state.offline_luxury_ratio))
 
-# 价格微调回调函数（支持+-1和+-10）
+# 价格微调回调函数
 def adjust_price(key, delta):
     st.session_state[key] += delta
     st.session_state[key] = max(1000, min(5000, st.session_state[key]))
@@ -162,7 +160,7 @@ item_cost = {
     "card_cost_rate": 0.2
 }
 
-# -------------------------- 2. 侧边栏参数面板（【修复1】价格位置完全还原） --------------------------
+# -------------------------- 2. 侧边栏参数面板 --------------------------
 # 第一区：全渠道销量与分配
 st.sidebar.header("📊 全渠道销量与分配")
 total_sales_volume = st.sidebar.slider("全渠道总销售总量（台）", 20000, 500000, 100000, step=10000)
@@ -216,17 +214,17 @@ channel_rate_config = {
     "线下": offline_rate_early if use_channel_stage == "前期" else offline_rate_late
 }
 
-# 第三区：多SKU销量占比分配（【修复2】全联动自动归一化）
+# 第三区：多SKU销量占比分配
 st.sidebar.divider()
 st.sidebar.subheader("🎮 多SKU销量占比分配")
 st.sidebar.caption("规则：线上仅售标准版/家庭版，线下仅售家庭版/豪华版 | 自动联动归一化")
 
-# 线上SKU占比（完美联动）
+# 线上SKU占比
 st.sidebar.markdown("**线上渠道SKU占比**")
 online_standard_ratio = st.sidebar.slider("标准版线上占比（%）", 0, 100, key="online_standard_ratio", on_change=on_online_sku_change, args=("online_standard_ratio",))
 online_family_ratio = st.sidebar.slider("家庭版线上占比（%）", 0, 100, key="online_family_ratio", on_change=on_online_sku_change, args=("online_family_ratio",))
 
-# 线下SKU占比（完美联动）
+# 线下SKU占比
 st.sidebar.markdown("**线下渠道SKU占比**")
 offline_family_ratio = st.sidebar.slider("家庭版线下占比（%）", 0, 100, key="offline_family_ratio", on_change=on_offline_sku_change, args=("offline_family_ratio",))
 offline_luxury_ratio = st.sidebar.slider("豪华版线下占比（%）", 0, 100, key="offline_luxury_ratio", on_change=on_offline_sku_change, args=("offline_luxury_ratio",))
@@ -234,7 +232,7 @@ offline_luxury_ratio = st.sidebar.slider("豪华版线下占比（%）", 0, 100,
 # 计算各SKU最终销量
 online_standard_volume = int(online_total_volume * online_standard_ratio / 100)
 online_family_volume = online_total_volume - online_standard_volume
-online_luxury_volume = 0  # 线上无豪华版
+online_luxury_volume = 0
 offline_family_volume = int(offline_total_volume * offline_family_ratio / 100)
 offline_luxury_volume = offline_total_volume - offline_family_volume
 sku_total_volume = {
@@ -243,18 +241,15 @@ sku_total_volume = {
     "豪华版": offline_luxury_volume
 }
 
-# 第四区：产品套装价格设定（【修复1】完全还原侧边栏位置，适配侧边栏宽度，不会跑到右边）
+# 第四区：产品套装价格设定
 st.sidebar.divider()
 st.sidebar.header("📦 产品套装价格设定")
 price_mode = st.sidebar.radio("售价模式", ["官方指导价", "大促价"], index=1)
 
-# 【修复1】价格控制组件：适配侧边栏宽度，完全在侧边栏内显示
+# 侧边栏专用价格控制组件
 def sidebar_price_control(key, label, min_val, max_val):
-    """侧边栏专用价格控制组件，适配窄宽度，不会溢出到主页面"""
     st.sidebar.markdown(f"**▸ {label}**")
-    # 滑块居中
     price_val = st.sidebar.slider("", min_val, max_val, key=key)
-    # 微调按钮放在滑块下方，两列布局，适配侧边栏
     col_btn1, col_btn2, col_btn3, col_btn4 = st.sidebar.columns(4)
     with col_btn1:
         st.button("➖10", key=f"{key}_minus10", on_click=adjust_price, args=(key, -10))
@@ -266,7 +261,6 @@ def sidebar_price_control(key, label, min_val, max_val):
         st.button("➕10", key=f"{key}_plus10", on_click=adjust_price, args=(key, 10))
     return price_val
 
-# 价格设置完全在侧边栏内，不会跑到右边
 std_guide_price = sidebar_price_control("std_guide", "标准版官方指导价", 1500, 2500)
 std_promo_price = sidebar_price_control("std_promo", "标准版大促价", 1400, 2400)
 st.sidebar.markdown("---")
@@ -313,7 +307,8 @@ sku_base_config[selected_sku_for_config].update({
 # 分账与成本参数
 st.sidebar.divider()
 st.sidebar.subheader("💰 其他分账与成本参数")
-royalty_fee = st.sidebar.slider("单台版权费（创维→创想，元）", 100, 300, 100)
+# 【修改1】单台版权费默认值改为200元
+royalty_fee = st.sidebar.slider("单台版权费（创维→创想，元）", 100, 300, 200)
 vip_split_rate_pct = st.sidebar.slider("会员收入创维分成比例", 0, 50, 20, format="%d%%")
 vip_split_rate = vip_split_rate_pct / 100
 vip_discount_rate_pct = st.sidebar.slider("赠送会员折价计提比例", 0, 100, 50, format="%d%%")
@@ -335,6 +330,10 @@ total_s_split = 0
 total_c_card = 0
 total_c_vip_discount = 0
 channel_cost_detail = []
+
+# 【修改3】双数据饼图数据准备
+sku_sales_amount = {}  # 各SKU销售金额
+sku_sales_cost = {}    # 各SKU销售成本
 
 for sku in sku_list:
     sku_config = sku_base_config[sku]
@@ -385,6 +384,12 @@ for sku in sku_list:
     # 双主体单台毛利计算
     skyworth_profit_per = p_hw_per + s_split_per - base_hardware_cost - extra_hardware_cost - avg_channel_cost_per - royalty_fee
     youduo_profit_per = p_sw_per + royalty_fee - s_split_per - card_cost_per - vip_discount_cost_per
+    
+    # 【修改3】计算各SKU销售金额和成本
+    sku_total_revenue = sku_price * sku_vol
+    sku_total_cost = (base_hardware_cost + extra_hardware_cost + avg_channel_cost_per + card_cost_per) * sku_vol
+    sku_sales_amount[sku] = sku_total_revenue
+    sku_sales_cost[sku] = sku_total_cost
     
     # 保存明细
     sku_calc_detail[sku] = {
@@ -505,7 +510,7 @@ with col5:
     </div>
     """, unsafe_allow_html=True)
 
-# 资金流向桑基图
+# 【修改2】资金流向桑基图（字体颜色改为黑色）
 st.divider()
 st.subheader("💸 加权平均单台资金流向图")
 sankey_labels = [
@@ -526,10 +531,27 @@ sankey_colors = [
     "#9467bd", "#d62728", "#d62728", "#2ecc71"
 ]
 fig_sankey = go.Figure(go.Sankey(
-    node=dict(pad=20, thickness=25, line=dict(color="#333", width=0.8), label=sankey_labels, color=sankey_colors),
-    link=dict(source=sankey_source, target=sankey_target, value=sankey_values, color=["rgba(214, 39, 40, 0.3)"]*13)
+    node=dict(
+        pad=20, 
+        thickness=25, 
+        line=dict(color="#333", width=0.8), 
+        label=sankey_labels, 
+        color=sankey_colors
+    ),
+    link=dict(
+        source=sankey_source, 
+        target=sankey_target, 
+        value=sankey_values, 
+        color=["rgba(214, 39, 40, 0.3)"]*13
+    )
 ))
-fig_sankey.update_layout(title_text="加权平均单台产品资金流向拆解（单位：元）", font_size=13, height=600)
+# 【修改2】设置桑基图字体颜色为黑色
+fig_sankey.update_layout(
+    title_text="加权平均单台产品资金流向拆解（单位：元）", 
+    font_size=13, 
+    height=600,
+    font=dict(color="black")  # 字体颜色改为黑色
+)
 st.plotly_chart(fig_sankey, use_container_width=True)
 
 # 各SKU销量与毛利明细
@@ -539,9 +561,41 @@ col_sku1, col_sku2 = st.columns([1.2, 1])
 with col_sku1:
     st.dataframe(sku_summary_df, use_container_width=True, hide_index=True)
 with col_sku2:
-    if not sku_summary_df.empty:
-        fig_sku_pie = px.pie(sku_summary_df, values="销量", names="SKU版本", title="各SKU销量占比", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2)
-        st.plotly_chart(fig_sku_pie, use_container_width=True)
+    # 【修改3】双数据饼图：各SKU销售金额和销售成本占比
+    if sku_sales_amount and sku_sales_cost:
+        # 准备数据
+        pie_df_amount = pd.DataFrame({
+            "SKU": list(sku_sales_amount.keys()),
+            "金额（万元）": [v/10000 for v in sku_sales_amount.values()],
+            "类型": "销售金额"
+        })
+        pie_df_cost = pd.DataFrame({
+            "SKU": list(sku_sales_cost.keys()),
+            "金额（万元）": [v/10000 for v in sku_sales_cost.values()],
+            "类型": "销售成本"
+        })
+        
+        # 创建子图
+        from plotly.subplots import make_subplots
+        fig_pie_dual = make_subplots(rows=1, cols=2, specs=[[{"type": "pie"}, {"type": "pie"}]],
+                                     subplot_titles=("各SKU销售金额占比", "各SKU销售成本占比"))
+        
+        # 销售金额饼图
+        fig_pie_dual.add_trace(
+            go.Pie(labels=pie_df_amount["SKU"], values=pie_df_amount["金额（万元）"], 
+                   name="销售金额", hole=0.4, domain=dict(x=[0, 0.45])),
+            row=1, col=1
+        )
+        
+        # 销售成本饼图
+        fig_pie_dual.add_trace(
+            go.Pie(labels=pie_df_cost["SKU"], values=pie_df_cost["金额（万元）"], 
+                   name="销售成本", hole=0.4, domain=dict(x=[0.55, 1])),
+            row=1, col=2
+        )
+        
+        fig_pie_dual.update_layout(height=400)
+        st.plotly_chart(fig_pie_dual, use_container_width=True)
 
 # 全渠道成本明细
 st.divider()
@@ -581,3 +635,108 @@ with col_detail2:
         ]
     })
     st.dataframe(youduo_detail_df, use_container_width=True, hide_index=True)
+
+# 【修改4】新增：销量和硬件成本对双方毛利影响的两张图表
+st.divider()
+st.subheader("📈 销量与硬件成本对毛利影响的敏感性分析")
+st.caption("基于当前参数，分析不同销量和硬件成本组合下，创维与创想的毛利变化趋势")
+
+# 准备敏感性分析数据
+# 定义变量范围
+hw_cost_range = np.linspace(base_hardware_cost - 100, base_hardware_cost + 100, 10)  # 硬件成本：当前±100元
+volume_levels = [50000, 100000, 200000, 300000, 500000]  # 不同销量档位
+
+# 计算数据
+sensitivity_data = []
+for vol in volume_levels:
+    for hw_cost in hw_cost_range:
+        # 简化计算：基于当前结构，仅改变硬件成本和总销量
+        # 计算单台毛利变化
+        skyworth_profit_per_simple = avg_p_hw_per + avg_s_split_per - hw_cost - avg_c_hw_extra_per - avg_channel_cost_per - royalty_fee
+        youduo_profit_per_simple = avg_p_sw_per + royalty_fee - avg_s_split_per - avg_c_card_per - avg_c_vip_discount_per
+        
+        sensitivity_data.append({
+            "硬件成本（元）": hw_cost,
+            "销量（台）": vol,
+            "创维总毛利（万元）": skyworth_profit_per_simple * vol / 10000,
+            "创想总毛利（万元）": youduo_profit_per_simple * vol / 10000
+        })
+sensitivity_df = pd.DataFrame(sensitivity_data)
+
+# 图表1：双变量敏感性折线图
+col_chart1, col_chart2 = st.columns(2)
+with col_chart1:
+    st.subheader("1. 双变量敏感性折线图")
+    st.caption("X轴：硬件成本 | 不同颜色：不同销量 | 左Y轴：创维毛利 | 右Y轴：创想毛利")
+    
+    # 创建双轴折线图
+    fig_line = go.Figure()
+    
+    # 为每个销量档位添加两条线
+    colors = px.colors.qualitative.D3
+    for i, vol in enumerate(volume_levels):
+        df_sub = sensitivity_df[sensitivity_df["销量（台）"] == vol]
+        # 创维毛利（左轴）
+        fig_line.add_trace(go.Scatter(
+            x=df_sub["硬件成本（元）"], y=df_sub["创维总毛利（万元）"],
+            name=f"创维-{vol/10000}万台",
+            line=dict(color=colors[i], dash="solid"),
+            yaxis="y"
+        ))
+        # 创想毛利（右轴）
+        fig_line.add_trace(go.Scatter(
+            x=df_sub["硬件成本（元）"], y=df_sub["创想总毛利（万元）"],
+            name=f"创想-{vol/10000}万台",
+            line=dict(color=colors[i], dash="dot"),
+            yaxis="y2"
+        ))
+    
+    fig_line.update_layout(
+        xaxis_title="硬件成本（元）",
+        yaxis=dict(title="创维总毛利（万元）", side="left"),
+        yaxis2=dict(title="创想总毛利（万元）", side="right", overlaying="y"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=500
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+
+# 图表2：等高线热力图（创维）
+with col_chart2:
+    st.subheader("2. 等高线热力图（创维数字）")
+    st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：创维毛利高低（绿=赚，红=亏）")
+    
+    fig_contour_skyworth = go.Figure(data=go.Contour(
+        z=sensitivity_df["创维总毛利（万元）"],
+        x=sensitivity_df["硬件成本（元）"],
+        y=sensitivity_df["销量（台）"],
+        colorscale="RdYlGn",  # 红-黄-绿
+        colorbar=dict(title="创维总毛利（万元）"),
+        contours=dict(showlabels=True)
+    ))
+    fig_contour_skyworth.update_layout(
+        xaxis_title="硬件成本（元）",
+        yaxis_title="销量（台）",
+        height=500
+    )
+    st.plotly_chart(fig_contour_skyworth, use_container_width=True)
+
+# 图表3：等高线热力图（创想）
+col_chart3, _ = st.columns(2)
+with col_chart3:
+    st.subheader("3. 等高线热力图（创想悦动）")
+    st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：创想毛利高低（绿=赚，红=亏）")
+    
+    fig_contour_youduo = go.Figure(data=go.Contour(
+        z=sensitivity_df["创想总毛利（万元）"],
+        x=sensitivity_df["硬件成本（元）"],
+        y=sensitivity_df["销量（台）"],
+        colorscale="RdYlGn",  # 红-黄-绿
+        colorbar=dict(title="创想总毛利（万元）"),
+        contours=dict(showlabels=True)
+    ))
+    fig_contour_youduo.update_layout(
+        xaxis_title="硬件成本（元）",
+        yaxis_title="销量（台）",
+        height=500
+    )
+    st.plotly_chart(fig_contour_youduo, use_container_width=True)
