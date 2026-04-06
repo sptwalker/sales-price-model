@@ -577,218 +577,197 @@ with c_d2:
     })
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
-# --- 保存方案：生成HTML报告 ---
+# --- 保存方案：生成单张信息图 ---
 st.divider()
 st.subheader("💾 保存当前方案")
 
 if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    def build_plan_html():
-        # 套装价格HTML表格行
-        price_rows = ""
-        for sku_name, prices in [("标准版", [std_guide_price, std_promo_price]),
-                                   ("家庭版", [fam_guide_price, fam_promo_price]),
-                                   ("豪华版", [lux_guide_price, lux_promo_price])]:
-            price_rows += f"<tr><td>{sku_name}</td><td>¥{prices[0]}</td><td>¥{prices[1]}</td></tr>"
+    # 构建单张统一表格：合并所有区块，用 colspan 分隔行区分各区
+    # 格式：[标签列, 列2, 列3, ...]
 
-        # SKU赠品配置行
-        gift_rows = ""
-        for sku_name in sku_list:
-            sc = sku_base_config[sku_name]
-            gift_rows += f"<tr><td><b>{sku_name}</b></td><td>{sc['default_extra_remote']}</td><td>{sc['default_light_gun']}</td><td>月卡{sc['default_vip_month']}/年卡{sc['default_vip_year']}</td><td>{sc['default_parent_card']}</td><td>全套{sc['default_nfc_full']}/SSR{sc['default_nfc_ssr']}</td></tr>"
+    # ── Section 1: 核心指标 ──
+    rows_col1 = ["全渠道总销售额", "全渠道总销量", "单台均价", "渠道综合成本",
+                 "渠道综合费率", "创维数字总毛利", "创想悦动总毛利", "产品总毛利", "综合毛利率"]
+    rows_col2 = [f"¥{round(total_revenue/10000,1)} 万元", f"{total_sales_volume:,} 台",
+                 f"¥{round(avg_price_per,0)} 元", f"¥{round(total_channel_cost/10000,1)} 万元",
+                 f"{round(avg_channel_rate,2)}%", f"¥{round(total_skyworth_profit/10000,1)} 万元",
+                 f"¥{round(total_youduo_profit/10000,1)} 万元", f"¥{round(total_profit/10000,1)} 万元",
+                 f"{total_margin_rate}%"]
 
-        # 渠道参数行
-        ch_rows = ""
-        for ch in all_ch:
-            ch_rows += f"<tr><td>{ch}</td><td>{channel_rate_config[ch]}%</td><td>{channel_volume_dict[ch]:,}台</td></tr>"
+    # ── Section 2: 套装价格 ──
+    sec2_col1 = ["", "", ""]
+    sec2_col2 = ["标准版", "家庭版", "豪华版"]
+    sec2_col3 = [f"¥{std_guide_price}", f"¥{fam_guide_price}", f"¥{lux_guide_price}"]
+    sec2_col4 = [f"¥{std_promo_price}", f"¥{fam_promo_price}", f"¥{lux_promo_price}"]
 
-        html = f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<style>
-*{{font-family:'PingFang SC','Microsoft YaHei',Arial,sans-serif;box-sizing:border-box;margin:0;padding:0}}
-body{{background:#F8F9FA;padding:16px;color:#333;font-size:14px}}
-h1{{text-align:center;color:#4A90D9;border-bottom:3px solid #4A90D9;padding-bottom:10px;font-size:20px;margin-bottom:4px}}
-.time{{text-align:center;color:#888;font-size:12px;margin-bottom:20px}}
-h2{{background:#4A90D9;color:white;padding:8px 12px;border-radius:6px;font-size:14px;margin:16px 0 8px}}
-table{{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:13px;background:white;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.1)}}
-th{{background:#4A90D9;color:white;padding:8px 10px;text-align:center}}
-td{{padding:7px 10px;text-align:center;border-bottom:1px solid #eee}}
-tr:nth-child(even){{background:#F0F8FF}}
-tr:last-child td{{border-bottom:none}}
-.metric-grid{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}}
-.card{{flex:1;min-width:45%;background:white;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.1);text-align:center}}
-.card .label{{font-size:12px;color:#888}}
-.card .value{{font-size:20px;font-weight:bold;color:#4A90D9;margin:4px 0}}
-.card .sub{{font-size:11px;color:#aaa}}
-.footer{{text-align:center;color:#aaa;font-size:11px;margin-top:20px;padding-top:10px;border-top:1px solid #eee}}
-.sub-title{{font-size:13px;font-weight:bold;color:#555;margin:12px 0 6px;padding-left:6px;border-left:4px solid #4A90D9}}
-.price-table th{{background:#27AE60}}
-.gift-table th{{background:#F39C12}}
-.ch-table th{{background:#9B59B6}}
-.param-grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
-.param-item{{background:white;padding:8px 12px;border-radius:6px;border-left:3px solid #E74C3C;font-size:12px;display:flex;justify-content:space-between}}
-.param-item .name{{color:#666}}
-.param-item .val{{font-weight:bold;color:#333}}
-</style>
-</head>
-<body>
-<h1>🎮 YOUDOO BOX 毛利测算方案报告</h1>
-<p class="time">⏰ 生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</p>
-
-<h2>📊 核心指标</h2>
-<div class="metric-grid">
-  <div class="card"><div class="label">全渠道总销售额</div><div class="value">¥{round(total_revenue/10000,1)}万</div></div>
-  <div class="card"><div class="label">全渠道总销量</div><div class="value">{total_sales_volume:,}台</div><div class="sub">均价 ¥{round(avg_price_per,0)}</div></div>
-  <div class="card"><div class="label">渠道综合成本</div><div class="value">¥{round(total_channel_cost/10000,1)}万</div><div class="sub">单台 ¥{round(avg_channel_cost_per_total,0)}</div></div>
-  <div class="card"><div class="label">创维数字总毛利</div><div class="value">¥{round(total_skyworth_profit/10000,1)}万</div><div class="sub">硬件{round(total_skyworth_hardware_profit/10000,1)}万+续费{round(total_skyworth_renew_profit/10000,1)}万</div></div>
-  <div class="card"><div class="label">创想悦动总毛利</div><div class="value">¥{round(total_youduo_profit/10000,1)}万</div><div class="sub">硬件{round(total_youduo_hardware_profit/10000,1)}万+续费{round(total_youduo_renew_profit/10000,1)}万</div></div>
-  <div class="card"><div class="label">产品总毛利</div><div class="value">¥{round(total_profit/10000,1)}万</div><div class="sub">综合毛利率 {total_margin_rate}%</div></div>
-</div>
-
-<h2>📦 套装价格</h2>
-<table class="price-table">
-<tr><th>SKU版本</th><th>官方指导价</th><th>大促价</th></tr>
-{price_rows}
-</table>
-
-<h2>🎁 各SKU赠品/配件配置</h2>
-<table class="gift-table">
-<tr><th>SKU</th><th>额外遥控器</th><th>光枪</th><th>VIP卡</th><th>家长钥匙卡</th><th>NFC卡</th></tr>
-{gift_rows}
-</table>
-
-<h2>💰 渠道参数</h2>
-<table class="ch-table">
-<tr><th>渠道</th><th>当前费率</th><th>销量</th></tr>
-{ch_rows}
-</table>
-<tr><td colspan="3"><div class="sub-title">会员·版权金·其他参数</div></td></tr>
-<div class="param-grid">
-<div class="param-item"><span class="name">续费年卡价格</span><span class="val">¥{renew_vip_year_price}</span></div>
-<div class="param-item"><span class="name">续费月卡价格</span><span class="val">¥{renew_vip_month_price}</span></div>
-<div class="param-item"><span class="name">会员续费率</span><span class="val">{renew_rate}%</span></div>
-<div class="param-item"><span class="name">年卡续费占比</span><span class="val">{year_card_renew_ratio}%</span></div>
-<div class="param-item"><span class="name">单台版权费</span><span class="val">¥{royalty_fee}</span></div>
-<div class="param-item"><span class="name">创维分成比例</span><span class="val">{vip_split_rate_pct}%</span></div>
-<div class="param-item"><span class="name">折价计提比例</span><span class="val">{vip_discount_rate_pct}%</span></div>
-<div class="param-item"><span class="name">基础硬件成本</span><span class="val">¥{base_hardware_cost}</span></div>
-</div>
-
-<div class="footer">YOUDOO BOX 毛利测算模型 V6.6 手机版 | 自动生成</div>
-</body>
-</html>"""
-        return html
-
-    # 用 Plotly Table 生成图片报告（浏览器可直接右键另存为PNG）
-    fig_report = go.Figure()
-
-    # ── 1. 核心指标表 ──
-    metrics_cells = [
-        ["全渠道总销售额", f"¥{round(total_revenue/10000,1)} 万元"],
-        ["全渠道总销量", f"{total_sales_volume:,} 台"],
-        ["单台均价", f"¥{round(avg_price_per,0)} 元"],
-        ["渠道综合成本", f"¥{round(total_channel_cost/10000,1)} 万元"],
-        ["渠道综合费率", f"{round(avg_channel_rate,2)}%"],
-        ["创维数字总毛利", f"¥{round(total_skyworth_profit/10000,1)} 万元"],
-        ["创想悦动总毛利", f"¥{round(total_youduo_profit/10000,1)} 万元"],
-        ["产品总毛利", f"¥{round(total_profit/10000,1)} 万元"],
-        ["综合毛利率", f"{total_margin_rate}%"],
-    ]
-    fig_report.add_trace(go.Table(
-        header=dict(values=["<b>📊 核心指标</b>", ""],
-                    fill_color="#4A90D9", font=dict(size=13, color="white"), align="center",
-                    height=36),
-        cells=dict(values=[[r[0] for r in metrics_cells], [r[1] for r in metrics_cells]],
-                   fill_color=[["#F0F8FF" if i%2==0 else "white" for i in range(len(metrics_cells))]],
-                   font=dict(size=12), align="left", height=30)
-    ))
-
-    # ── 2. 套装价格表 ──
-    price_cells = [["标准版", f"¥{std_guide_price}", f"¥{std_promo_price}"],
-                   ["家庭版", f"¥{fam_guide_price}", f"¥{fam_promo_price}"],
-                   ["豪华版", f"¥{lux_guide_price}", f"¥{lux_promo_price}"]]
-    fig_report.add_trace(go.Table(
-        header=dict(values=["<b>📦 套装价格</b>", "官方指导价", "大促价"],
-                    fill_color="#27AE60", font=dict(size=13, color="white"), align="center", height=36),
-        cells=dict(values=[ [r[0] for r in price_cells],
-                            [r[1] for r in price_cells],
-                            [r[2] for r in price_cells] ],
-                   fill_color=[["#F0FFF4" if i%2==0 else "white" for i in range(3)]],
-                   font=dict(size=12), align="center", height=30)
-    ))
-
-    # ── 3. SKU赠品配置表 ──
-    gift_cells = []
+    # ── Section 3: SKU赠品配置 ──
+    sec3_col1, sec3_col2, sec3_col3, sec3_col4, sec3_col5, sec3_col6 = [], [], [], [], [], []
     for sku_name in sku_list:
         sc = sku_base_config[sku_name]
-        gift_cells.append([
-            sku_name,
-            str(sc["default_extra_remote"]),
-            str(sc["default_light_gun"]),
-            f"月卡{sc['default_vip_month']}/年卡{sc['default_vip_year']}",
-            str(sc["default_parent_card"]),
-            f"全套{sc['default_nfc_full']}/SSR{sc['default_nfc_ssr']}"
-        ])
-    fig_report.add_trace(go.Table(
-        header=dict(values=["<b>🎁 SKU赠品配置</b>", "遥控器", "光枪", "VIP卡", "家长钥匙卡", "NFC卡"],
-                    fill_color="#F39C12", font=dict(size=12, color="white"), align="center", height=36),
-        cells=dict(values=[ [r[0] for r in gift_cells],
-                            [r[1] for r in gift_cells],
-                            [r[2] for r in gift_cells],
-                            [r[3] for r in gift_cells],
-                            [r[4] for r in gift_cells],
-                            [r[5] for r in gift_cells] ],
-                   fill_color=[["#FFFBF0" if i%2==0 else "white" for i in range(6)]],
-                   font=dict(size=11), align="center", height=30)
-    ))
+        sec3_col1.append(sku_name)
+        sec3_col2.append(str(sc["default_extra_remote"]))
+        sec3_col3.append(str(sc["default_light_gun"]))
+        sec3_col4.append(f"月卡{sc['default_vip_month']}/年卡{sc['default_vip_year']}")
+        sec3_col5.append(str(sc["default_parent_card"]))
+        sec3_col6.append(f"全套{sc['default_nfc_full']}/SSR{sc['default_nfc_ssr']}")
 
-    # ── 4. 渠道参数表 ──
-    ch_cells = []
+    # ── Section 4: 渠道参数 ──
+    sec4_col1, sec4_col2, sec4_col3 = [], [], []
     for ch in all_ch:
-        ch_cells.append([ch, f"{channel_rate_config[ch]}%", f"{channel_volume_dict[ch]:,}台"])
-    fig_report.add_trace(go.Table(
-        header=dict(values=["<b>💰 渠道参数</b>", "当前费率", "销量"],
-                    fill_color="#9B59B6", font=dict(size=13, color="white"), align="center", height=36),
-        cells=dict(values=[ [r[0] for r in ch_cells],
-                            [r[1] for r in ch_cells],
-                            [r[2] for r in ch_cells] ],
-                   fill_color=[["#F5F0FF" if i%2==0 else "white" for i in range(3)]],
-                   font=dict(size=12), align="center", height=30)
-    ))
+        sec4_col1.append(ch)
+        sec4_col2.append(f"{channel_rate_config[ch]}%")
+        sec4_col3.append(f"{channel_volume_dict[ch]:,}台")
 
-    # ── 5. 会员·版权金·其他参数表 ──
-    other_cells = [
-        ["续费年卡价格", f"¥{renew_vip_year_price}"],
-        ["续费月卡价格", f"¥{renew_vip_month_price}"],
-        ["会员续费率", f"{renew_rate}%"],
-        ["年卡续费占比", f"{year_card_renew_ratio}%"],
-        ["单台版权费", f"¥{royalty_fee}"],
-        ["创维分成比例", f"{vip_split_rate_pct}%"],
-        ["折价计提比例", f"{vip_discount_rate_pct}%"],
-        ["基础硬件成本", f"¥{base_hardware_cost}"],
+    # ── Section 5: 会员·版权金·其他 ──
+    sec5_col1 = ["续费年卡价格", "续费月卡价格", "会员续费率", "年卡续费占比",
+                  "单台版权费", "创维分成比例", "折价计提比例", "基础硬件成本"]
+    sec5_col2 = [f"¥{renew_vip_year_price}", f"¥{renew_vip_month_price}", f"{renew_rate}%",
+                  f"{year_card_renew_ratio}%", f"¥{royalty_fee}", f"{vip_split_rate_pct}%",
+                  f"{vip_discount_rate_pct}%", f"¥{base_hardware_cost}"]
+
+    # ── 构建统一表格 ──
+    # 背景色数组：按区块着色
+    BG_COLORS = (
+        ["#4A90D9"] * 9 +          # 核心指标 蓝
+        ["#27AE60"] * 4 +           # 价格表 绿
+        ["#F39C12"] * 7 +           # SKU赠品 橙（1标题+3SKU+3占位）
+        ["#9B59B6"] * 4 +           # 渠道参数 紫
+        ["#E74C3C"] * 9             # 会员·版权金 红
+    )
+
+    all_values = [
+        rows_col1 + ["", "", ""] + sec3_col1 + [""] * 4 + sec4_col1 + [""] * 9 + sec5_col1,
+        rows_col2 + sec2_col2 + sec2_col3 + sec2_col4 + sec3_col2 + sec3_col3 + sec3_col4 + sec3_col5 + sec3_col6 + sec4_col2 + sec4_col3 + sec5_col2,
     ]
-    fig_report.add_trace(go.Table(
-        header=dict(values=["<b>📋 会员·版权金·其他参数</b>", ""],
-                    fill_color="#E74C3C", font=dict(size=13, color="white"), align="center", height=36),
-        cells=dict(values=[ [r[0] for r in other_cells], [r[1] for r in other_cells] ],
-                   fill_color=[["#FFF0F0" if i%2==0 else "white" for i in range(len(other_cells))]],
-                   font=dict(size=12), align="left", height=30)
+
+    # 计算每行背景（交替色 + 区块色）
+    fill_colors = []
+    # 核心指标 9行
+    for i in range(9):
+        fill_colors.append(["#E8F4FD", "white"])
+    # 价格分隔行（1行section标题 + 3数据行）
+    fill_colors.append(["#27AE60", "#27AE60"])  # section header
+    for i in range(3):
+        fill_colors.append(["#E8F8EE", "white"])
+    # SKU赠品（1标题 + 3数据）
+    fill_colors.append(["#F39C12", "#F39C12"])  # section header
+    for i in range(3):
+        fill_colors.append(["#FFF8E8", "white"])
+    # 渠道（1标题 + 4数据）
+    fill_colors.append(["#9B59B6", "#9B59B6"])
+    for i in range(4):
+        fill_colors.append(["#F0EBF8", "white"])
+    # 会员参数（1标题 + 8数据）
+    fill_colors.append(["#E74C3C", "#E74C3C"])
+    for i in range(8):
+        fill_colors.append(["#FEF0F0", "white"])
+
+    # 计算每个section的列宽（用于对齐）
+    # 我们用2列表格，但某些行需要视觉上看起来像多列表格
+    # 通过字体颜色/内容来区分
+
+    fig = go.Figure()
+
+    # Section header行用fill_color覆盖
+    # Plotly Table一次渲染，需要用cells.align控制对齐
+    header_vals = [["📊 核心指标", ""], ["📦 套装价格", ""], ["🎁 SKU赠品配置", ""], ["💰 渠道参数", ""], ["📋 会员·版权金·其他参数", ""]]
+
+    # 构建合并单元格效果：用 column-span 实现分组表头
+    # Plotly 不原生支持跨列合并，用 align=merge 无效
+    # 改用：每个区块用独立subplot行
+
+    # ── 方法：5个区块，每个区块用独立的 layout annotations + table ──
+    # 不，这样还是多图
+    #
+    # ── 最简方案：把所有数据放进一张表，用 SPAN 实现合并单元格 ──
+
+    # 分组表头行（colspan=3 的合并效果，每行2列但显示时占满）
+    # Plotly table 不支持 colspan，只支持行内对齐
+    # 最终方案：把section标题作为一行数据，其背景色突出，内容跨列显示
+
+    # 构建完整的单表数据
+    # 列1: 区块/标签  列2: 数据（价格表则拆成2列）
+
+    # 最优解：6列表格
+    # col1=标签/col2-col3=价格表/col4-col6=SKU赠品
+    # 但这样数据对齐会很复杂
+
+    # ── 最终方案：2列表格 + 区块分隔标题行 ──
+    # 通过每行的col1内容包含区块名来区分不同section
+
+    # 简化版：单表2列，区块标题行特殊着色
+    row_labels = (
+        ["━━━ 📊 核心指标 ━━━"] + rows_col1 +
+        ["━━━ 📦 套装价格 ━━━"] +
+        ["标准版", "家庭版", "豪华版"] +
+        ["━━━ 🎁 SKU赠品配置 ━━━"] +
+        sec3_col1 +
+        ["━━━ 💰 渠道参数 ━━━"] +
+        sec4_col1 +
+        ["━━━ 📋 会员·版权金 ━━━"] +
+        sec5_col1
+    )
+    row_values = (
+        ["", ""] +
+        rows_col2 +
+        [f"指导价 ¥{std_guide_price}", f"指导价 ¥{fam_guide_price}", f"指导价 ¥{lux_guide_price}"] +
+        [f"大促价 ¥{std_promo_price}", f"大促价 ¥{fam_promo_price}", f"大促价 ¥{lux_promo_price}"] +
+        [f"遥控×{sc['default_extra_remote']}" for sc in [sku_base_config[s] for s in sku_list]] +
+        [f"光枪×{sc['default_light_gun']}" for sc in [sku_base_config[s] for s in sku_list]] +
+        [f"月卡{sku_base_config[s]['default_vip_month']}/年卡{sku_base_config[s]['default_vip_year']}" for s in sku_list] +
+        [f"家长卡×{sku_base_config[s]['default_parent_card']}" for s in sku_list] +
+        [f"NFC×{sku_base_config[s]['default_nfc_full']}/SSR×{sku_base_config[s]['default_nfc_ssr']}" for s in sku_list] +
+        [f"{channel_rate_config[ch]}%  {channel_volume_dict[ch]:,}台" for ch in all_ch] +
+        sec5_col2
+    )
+
+    # section header 行的背景
+    SECTION_BG = {
+        "━━━ 📊 核心指标 ━━━": "#4A90D9",
+        "━━━ 📦 套装价格 ━━━": "#27AE60",
+        "━━━ 🎁 SKU赠品配置 ━━━": "#F39C12",
+        "━━━ 💰 渠道参数 ━━━": "#9B59B6",
+        "━━━ 📋 会员·版权金 ━━━": "#E74C3C",
+    }
+    alt_bg = ["#F0F8FF", "white"]
+    alt_idx = 0
+    cell_colors = []
+    for label in row_labels:
+        if label in SECTION_BG:
+            cell_colors.append([SECTION_BG[label], SECTION_BG[label]])
+            alt_idx = 0
+        else:
+            cell_colors.append([alt_bg[alt_idx % 2], alt_bg[alt_idx % 2]])
+            alt_idx += 1
+
+    fig.add_trace(go.Table(
+        header=dict(
+            values=["<b>YOUDOO BOX 毛利测算方案报告</b>", ""],
+            fill_color="#2C3E50",
+            font=dict(size=15, color="white"),
+            align="center",
+            height=40
+        ),
+        cells=dict(
+            values=[row_labels, row_values],
+            fill_color=cell_colors,
+            font=dict(size=12, color=["white" if c[0] in SECTION_BG.values() else "#333" for c in cell_colors]),
+            align="left",
+            height=32
+        )
     ))
 
-    fig_report.update_layout(
+    fig.update_layout(
         title=dict(
-            text=f"<b>🎮 YOUDOO BOX 毛利测算方案报告</b><br>"
-                 f"<span style='font-size:12px;color:#888'>生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</span>",
-            x=0.5, xanchor="center", font_size=16
+            text=f"<span style='font-size:12px;color:#888'>生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</span>",
+            x=0.5, xanchor="center", font_size=14
         ),
-        height=1600,
-        margin=dict(l=20, r=20, t=80, b=40),
+        height=1200,
+        margin=dict(l=20, r=20, t=60, b=30),
         dragmode=False
     )
 
     st.success("✅ 方案信息图已生成！右键图片 → 「图片另存为」可保存为 PNG。")
-    st.plotly_chart(fig_report, use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
