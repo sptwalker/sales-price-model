@@ -346,8 +346,15 @@ avg_channel_cost_per_total = total_channel_cost / total_sales_volume if total_sa
 avg_channel_rate = avg_channel_cost_per_total / avg_price_per * 100 if avg_price_per > 0 else 0
 total_margin_rate = round(total_profit / (total_revenue + total_renew_revenue) * 100, 2) if (total_revenue + total_renew_revenue) > 0 else 0
 
-# Plotly 图表配置：禁用触摸缩放和拖拽
-PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True, "scrollZoom": False, "doubleClick": False}
+# Plotly 图表配置：禁用所有触摸交互
+PLOTLY_CONFIG = {
+    "displayModeBar": False,
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
+    "dragmode": False,
+    "modeBarButtonsToRemove": ["zoomIn2d", "zoomOut2d", "pan2d", "lasso2d", "select2d", "autoScale2d", "resetScale2d"]
+}
 
 # ============================================================
 # 4. 主界面 - 手机版展示
@@ -488,27 +495,61 @@ for vol in vol_levels:
 sens_df = pd.DataFrame(sens_data)
 colors = px.colors.qualitative.Set2
 
+# 折线图1：创维总毛利
 fig_s1 = go.Figure()
 for i, vol in enumerate(vol_levels):
     sub = sens_df[sens_df["销量（台）"] == vol]
     fig_s1.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创维总毛利（万元）"],
                                 name=f"创维-{int(vol/1000)}k",
                                 line=dict(color=colors[i % len(colors)])))
-fig_s1.update_layout(title="硬件成本 vs 创维总毛利", xaxis_title="硬件成本（元）",
+fig_s1.update_layout(title="折线图：硬件成本 vs 创维总毛利", xaxis_title="硬件成本（元）",
                      yaxis_title="创维总毛利（万元）", height=350,
-                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                     dragmode=False)
 st.plotly_chart(fig_s1, use_container_width=True, config=PLOTLY_CONFIG)
 
+# 折线图2：创想总毛利
 fig_s2 = go.Figure()
 for i, vol in enumerate(vol_levels):
     sub = sens_df[sens_df["销量（台）"] == vol]
     fig_s2.add_trace(go.Scatter(x=sub["硬件成本（元）"], y=sub["创想总毛利（万元）"],
                                 name=f"创想-{int(vol/1000)}k",
                                 line=dict(color=colors[i % len(colors)], dash="dot")))
-fig_s2.update_layout(title="硬件成本 vs 创想总毛利", xaxis_title="硬件成本（元）",
+fig_s2.update_layout(title="折线图：硬件成本 vs 创想总毛利", xaxis_title="硬件成本（元）",
                      yaxis_title="创想总毛利（万元）", height=350,
-                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                     dragmode=False)
 st.plotly_chart(fig_s2, use_container_width=True, config=PLOTLY_CONFIG)
+
+# 热力图1：创维数字
+st.subheader("🌡️ 等高线热力图（创维数字）")
+st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：毛利高低（绿=赚，红=亏）")
+fig_contour_sky = go.Figure(data=go.Contour(
+    z=sens_df["创维总毛利（万元）"],
+    x=sens_df["硬件成本（元）"],
+    y=sens_df["销量（台）"],
+    colorscale="RdYlGn",
+    colorbar=dict(title="创维总毛利（万元）"),
+    contours=dict(showlabels=True)
+))
+fig_contour_sky.update_layout(xaxis_title="硬件成本（元）", yaxis_title="销量（台）",
+                              height=400, dragmode=False)
+st.plotly_chart(fig_contour_sky, use_container_width=True, config=PLOTLY_CONFIG)
+
+# 热力图2：创想悦动
+st.subheader("🌡️ 等高线热力图（创想悦动）")
+st.caption("X轴：硬件成本 | Y轴：销量 | 颜色深浅：毛利高低（绿=赚，红=亏）")
+fig_contour_you = go.Figure(data=go.Contour(
+    z=sens_df["创想总毛利（万元）"],
+    x=sens_df["硬件成本（元）"],
+    y=sens_df["销量（台）"],
+    colorscale="RdYlGn",
+    colorbar=dict(title="创想总毛利（万元）"),
+    contours=dict(showlabels=True)
+))
+fig_contour_you.update_layout(xaxis_title="硬件成本（元）", yaxis_title="销量（台）",
+                              height=400, dragmode=False)
+st.plotly_chart(fig_contour_you, use_container_width=True, config=PLOTLY_CONFIG)
 
 # --- 财务明细 ---
 st.divider()
