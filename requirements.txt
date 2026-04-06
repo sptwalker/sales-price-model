@@ -2,3 +2,4 @@ streamlit
 pandas
 plotly
 numpy
+pillow>=10.0.0
