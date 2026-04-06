@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime
 import io
 import random
+from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
 # 页面配置 - 手机版
@@ -587,131 +588,127 @@ with c_d2:
     st.dataframe(you_df, use_container_width=True, hide_index=True)
 
 # ============================================================
-# 【修复版】方案信息图生成模块（修复Plotly表格字体错误）
+# 【最终修复版】纯静态PNG方案信息图生成（手机端长按可保存）
 # ============================================================
 st.divider()
 st.subheader("💾 保存当前方案")
 
-if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
-    # 1. 随机生成方案名
-    scheme_name = random.choice(SCHEME_NAME_LIST)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    # 2. 构建信息图数据行（简化版，兼容Plotly格式）
-    # 格式：每行是一个完整的字符串，用 | 分隔不同部分
-    display_rows = []
-    fill_colors = []
-    alt_bg = ["#F0F8FF", "white"]
-    alt_idx = 0
+# 图片生成函数
+def create_scheme_image(scheme_name, now, price_mode, use_channel_stage):
+    # 图片基础配置
+    img_width = 720  # 手机竖屏宽度
+    row_height = 40   # 每行高度
+    title_row_height = 50  # 区块标题行高度
+    header_height = 80  # 顶部主标题高度
+    footer_height = 60  # 底部备注高度
+    margin = 40  # 左右边距
 
-    # --- 区块1：预设销售目标（蓝色）---
-    display_rows.append(f"━━━ 📊 预设销售目标 ━━━")
-    fill_colors.append("#4A90D9")
-    alt_idx = 0
+    # 构建所有内容行
+    content_rows = []
+    # 区块1：预设销售目标
+    content_rows.append({"type": "title", "text": "📊 预设销售目标", "bg_color": "#4A90D9", "text_color": "white"})
+    content_rows.append({"type": "content", "text": f"全渠道总销售额：¥{round(total_revenue/10000, 1)} 万元", "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content", "text": f"全渠道总销量：{total_sales_volume:,} 台 | 单台均价 ¥{round(avg_price_per, 0)}", "bg_color": "white"})
+    content_rows.append({"type": "content", "text": f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元 | 综合费率 {round(avg_channel_rate, 2)}%", "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content", "text": f"产品总毛利：¥{round(total_profit/10000, 1)} 万元 | 综合毛利率 {total_margin_rate}%", "bg_color": "white"})
     
-    target_items = [
-        f"全渠道总销售额：¥{round(total_revenue/10000, 1)} 万元",
-        f"全渠道总销量：{total_sales_volume:,} 台 | 单台均价 ¥{round(avg_price_per, 0)}",
-        f"渠道综合成本：¥{round(total_channel_cost/10000, 1)} 万元 | 综合费率 {round(avg_channel_rate, 2)}%",
-        f"产品总毛利：¥{round(total_profit/10000, 1)} 万元 | 综合毛利率 {total_margin_rate}%"
-    ]
-    for item in target_items:
-        display_rows.append(item)
-        fill_colors.append(alt_bg[alt_idx % 2])
-        alt_idx += 1
-
-    # --- 区块2：各套装定价方案（绿色）---
-    display_rows.append(f"━━━ 📦 各套装定价方案 ━━━")
-    fill_colors.append("#27AE60")
-    alt_idx = 0
+    # 区块2：各套装定价方案
+    content_rows.append({"type": "title", "text": "📦 各套装定价方案", "bg_color": "#27AE60", "text_color": "white"})
+    content_rows.append({"type": "content", "text": f"标准版：官方指导价 ¥{std_guide_price} | 大促价 ¥{std_promo_price}", "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content", "text": f"家庭版：官方指导价 ¥{fam_guide_price} | 大促价 ¥{fam_promo_price}", "bg_color": "white"})
+    content_rows.append({"type": "content", "text": f"豪华版：官方指导价 ¥{lux_guide_price} | 大促价 ¥{lux_promo_price}", "bg_color": "#F0F8FF"})
     
-    price_items = [
-        f"标准版：官方指导价 ¥{std_guide_price} | 大促价 ¥{std_promo_price}",
-        f"家庭版：官方指导价 ¥{fam_guide_price} | 大促价 ¥{fam_promo_price}",
-        f"豪华版：官方指导价 ¥{lux_guide_price} | 大促价 ¥{lux_promo_price}"
-    ]
-    for item in price_items:
-        display_rows.append(item)
-        fill_colors.append(alt_bg[alt_idx % 2])
-        alt_idx += 1
-
-    # --- 区块3：各SKU详细配置方案（橙色）---
-    display_rows.append(f"━━━ 🎁 各SKU详细配置方案 ━━━")
-    fill_colors.append("#F39C12")
-    alt_idx = 0
-    
+    # 区块3：各SKU详细配置方案
+    content_rows.append({"type": "title", "text": "🎁 各SKU详细配置方案", "bg_color": "#F39C12", "text_color": "white"})
     for sku_name in sku_list:
         sc = sku_base_config[sku_name]
         config_text = f"{sku_name}：遥控×{sc['default_extra_remote']} | 光枪×{sc['default_light_gun']} | 月卡×{sc['default_vip_month']}/年卡×{sc['default_vip_year']} | 家长卡×{sc['default_parent_card']} | NFC全套×{sc['default_nfc_full']}/SSR×{sc['default_nfc_ssr']}"
-        display_rows.append(config_text)
-        fill_colors.append(alt_bg[alt_idx % 2])
-        alt_idx += 1
-
-    # --- 区块4：会员价格方案（紫色）---
-    display_rows.append(f"━━━ 📋 会员价格方案 ━━━")
-    fill_colors.append("#9B59B6")
-    alt_idx = 0
+        bg = "#F0F8FF" if sku_name == "标准版" else ("white" if sku_name == "家庭版" else "#F0F8FF")
+        content_rows.append({"type": "content", "text": config_text, "bg_color": bg})
     
-    vip_items = [
-        f"会员年卡价格：¥{renew_vip_year_price}",
-        f"会员月卡价格：¥{renew_vip_month_price}"
-    ]
-    for item in vip_items:
-        display_rows.append(item)
-        fill_colors.append(alt_bg[alt_idx % 2])
-        alt_idx += 1
-
-    # --- 区块5：详细销售参数设定（灰色小字）---
-    display_rows.append(f"━━━ 🔍 详细销售参数设定 ━━━")
-    fill_colors.append("#888888")
-    alt_idx = 0
+    # 区块4：会员价格方案
+    content_rows.append({"type": "title", "text": "📋 会员价格方案", "bg_color": "#9B59B6", "text_color": "white"})
+    content_rows.append({"type": "content", "text": f"会员年卡价格：¥{renew_vip_year_price}", "bg_color": "#F0F8FF"})
+    content_rows.append({"type": "content", "text": f"会员月卡价格：¥{renew_vip_month_price}", "bg_color": "white"})
     
-    detail_items = [
-        f"渠道参数：京东 {channel_rate_config['京东']}%/{channel_volume_dict['京东']:,}台 | 天猫 {channel_rate_config['天猫']}%/{channel_volume_dict['天猫']:,}台 | 抖音 {channel_rate_config['抖音']}%/{channel_volume_dict['抖音']:,}台 | 线下 {channel_rate_config['线下']}%/{channel_volume_dict['线下']:,}台",
-        f"硬件参数：基础硬件成本 ¥{base_hardware_cost} | 单台版权费 ¥{royalty_fee}",
-        f"会员参数：会员续费率 {renew_rate}% | 年卡续费占比 {year_card_renew_ratio}% | 创维分成比例 {vip_split_rate_pct}% | 赠送会员折价比例 {vip_discount_rate_pct}%"
-    ]
-    for item in detail_items:
-        display_rows.append(item)
-        fill_colors.append("#F5F5F5")
-        alt_idx += 1
+    # 区块5：详细销售参数设定
+    content_rows.append({"type": "title", "text": "🔍 详细销售参数设定", "bg_color": "#888888", "text_color": "white"})
+    content_rows.append({"type": "content", "text": f"渠道参数：京东 {channel_rate_config['京东']}%/{channel_volume_dict['京东']:,}台 | 天猫 {channel_rate_config['天猫']}%/{channel_volume_dict['天猫']:,}台 | 抖音 {channel_rate_config['抖音']}%/{channel_volume_dict['抖音']:,}台 | 线下 {channel_rate_config['线下']}%/{channel_volume_dict['线下']:,}台", "bg_color": "#F5F5F5"})
+    content_rows.append({"type": "content", "text": f"硬件参数：基础硬件成本 ¥{base_hardware_cost} | 单台版权费 ¥{royalty_fee}", "bg_color": "#F5F5F5"})
+    content_rows.append({"type": "content", "text": f"会员参数：会员续费率 {renew_rate}% | 年卡续费占比 {year_card_renew_ratio}% | 创维分成比例 {vip_split_rate_pct}% | 赠送会员折价比例 {vip_discount_rate_pct}%", "bg_color": "#F5F5F5"})
 
-    # 3. 生成竖屏信息图（简化版，完全兼容Plotly）
-    fig = go.Figure()
+    # 计算图片总高度
+    total_row_height = 0
+    for row in content_rows:
+        total_row_height += title_row_height if row["type"] == "title" else row_height
+    img_height = header_height + total_row_height + footer_height
 
-    # 渲染表格（单列布局，避免多列字体配置错误）
-    fig.add_trace(go.Table(
-        header=dict(
-            values=[f"<b>YOUDOO BOX售价测算方案（{scheme_name}版）</b>"],
-            fill_color="#2C3E50",
-            font=dict(size=16, color="white"),
-            align="center",
-            height=50
-        ),
-        cells=dict(
-            values=[display_rows],
-            fill_color=[fill_colors],
-            font=dict(
-                color=["white" if c in ["#4A90D9", "#27AE60", "#F39C12", "#9B59B6", "#888888"] else "#333333" for c in fill_colors],
-                size=12
-            ),
-            align="left",
-            height=36
-        )
-    ))
+    # 创建画布
+    image = Image.new("RGB", (img_width, img_height), "white")
+    draw = ImageDraw.Draw(image)
 
-    # 竖屏适配配置
-    fig.update_layout(
-        title=dict(
-            text=f"<span style='font-size:12px;color:#888'>生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}</span>",
-            x=0.5, xanchor="center", font_size=12
-        ),
-        width=720,  # 手机竖屏宽度
-        height=1600, # 手机竖屏高度
-        margin=dict(l=20, r=20, t=60, b=30),
-        dragmode=False
-    )
+    # 加载字体（跨平台兼容）
+    try:
+        # Streamlit Cloud Linux环境默认字体
+        font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 24)
+        font_content = ImageFont.truetype("DejaVuSans.ttf", 18)
+        font_footer = ImageFont.truetype("DejaVuSans.ttf", 14)
+    except:
+        # Windows/Mac fallback
+        font_title = ImageFont.load_default(size=24)
+        font_content = ImageFont.load_default(size=18)
+        font_footer = ImageFont.load_default(size=14)
 
-    # 4. 手机端提示语
+    # 绘制顶部主标题
+    main_title = f"YOUDOO BOX售价测算方案（{scheme_name}版）"
+    draw.rectangle([0, 0, img_width, header_height], fill="#2C3E50")
+    title_w, title_h = draw.textbbox((0, 0), main_title, font=font_title)[2:4]
+    draw.text(((img_width - title_w)/2, (header_height - title_h)/2), main_title, font=font_title, fill="white")
+
+    # 绘制内容行
+    current_y = header_height
+    for row in content_rows:
+        # 行高
+        rh = title_row_height if row["type"] == "title" else row_height
+        # 绘制背景
+        draw.rectangle([margin, current_y, img_width - margin, current_y + rh], fill=row["bg_color"])
+        # 绘制文字
+        text_color = row.get("text_color", "#000000")
+        font = font_title if row["type"] == "title" else font_content
+        draw.text((margin + 15, current_y + (rh - font.size)/2), row["text"], font=font, fill=text_color)
+        # 下移
+        current_y += rh
+
+    # 绘制底部备注
+    footer_text = f"生成时间：{now} | 售价模式：{price_mode} | 成本阶段：{use_channel_stage}"
+    draw.rectangle([0, current_y, img_width, current_y + footer_height], fill="#F5F5F5")
+    footer_w, footer_h = draw.textbbox((0, 0), footer_text, font=font_footer)[2:4]
+    draw.text(((img_width - footer_w)/2, current_y + (footer_height - footer_h)/2), footer_text, font=font_footer, fill="#666666")
+
+    # 转字节流
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    return img_byte_arr
+
+# 生成按钮
+if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
+    # 基础信息
+    scheme_name = random.choice(SCHEME_NAME_LIST)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # 生成图片
+    img_bytes = create_scheme_image(scheme_name, now, price_mode, use_channel_stage)
+    
+    # 手机端提示
     st.success("✅ 方案信息图已生成！长按图片可以选择保存图片到手机相册")
-    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+    # 渲染原生图片（手机端长按可保存）
+    st.image(img_bytes, use_column_width=True)
+    # 额外增加一键下载按钮
+    st.download_button(
+        label="📥 一键下载PNG图片",
+        data=img_bytes,
+        file_name=f"YOUDOO售价方案_{scheme_name}版_{datetime.now().strftime('%Y%m%d')}.png",
+        mime="image/png",
+        use_container_width=True
+    )
