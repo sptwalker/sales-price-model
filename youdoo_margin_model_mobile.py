@@ -603,7 +603,7 @@ def load_chinese_font(font_type="regular", font_size=18):
     if font_type == "bold":
         font_paths.append("NotoSansSC-Bold.ttf")
     else:
-        font_paths.append("NotoSansSC-Regular.ttf")
+        font_paths.append("Lenovosmallhei.ttf")
     
     # 2. Windows系统兼容
     font_paths.append("C:/Windows/Fonts/msyh.ttc")  # 微软雅黑
@@ -614,8 +614,8 @@ def load_chinese_font(font_type="regular", font_size=18):
     font_paths.append("/System/Library/Fonts/STHeiti Light.ttc") # 华文黑体
     
     # 4. Linux/Streamlit Cloud系统兼容
-    font_paths.append("/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf")
-    font_paths.append("/usr/share/fonts/opentype/noto/NotoSansSC-Regular.ttf")
+    font_paths.append("/usr/share/fonts/truetype/noto/Lenovosmallhei.ttf")
+    font_paths.append("/usr/share/fonts/opentype/noto/Lenovosmallhei.ttf")
 
     # 循环尝试加载字体
     for font_path in font_paths:
