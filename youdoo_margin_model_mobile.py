@@ -5,6 +5,13 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
 import io
+import random
+import os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch, Rectangle
+import matplotlib.patheffects as pe
 
 # ============================================================
 # 页面配置 - 手机版
@@ -603,119 +610,276 @@ with c_d2:
 
 
 # ============================================================
-# 保存方案：HTML 报告（颜色精准，兼容所有平台）
+# 保存方案：生成 PNG 信息图
 # ============================================================
 st.divider()
 st.subheader("💾 保存当前方案")
 
 if st.button("📥 生成方案信息图", type="primary", use_container_width=True):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    scheme_name = random.choice(SCHEME_NAME_LIST)
 
-    # 毛利颜色（和PC版一致，用HTML CSS精确控制）
-    sky_color = "#27AE60" if total_skyworth_profit >= 0 else "#E74C3C"
-    you_color = "#27AE60" if total_youduo_profit >= 0 else "#E74C3C"
-    tot_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+    # --- 字体设置 ---
+    font_dir = os.path.dirname(os.path.abspath(__file__))
+    font_bold_path = os.path.join(font_dir, "NotoSansSC-Bold.ttf")
+    font_regular_path = os.path.join(font_dir, "NotoSansSC-Regular.ttf")
+    from matplotlib.font_manager import FontProperties
+    if os.path.exists(font_bold_path):
+        font_bold = FontProperties(fname=font_bold_path)
+    else:
+        font_bold = FontProperties(family="SimHei")
+    if os.path.exists(font_regular_path):
+        font_regular = FontProperties(fname=font_regular_path)
+    else:
+        font_regular = FontProperties(family="SimHei")
 
-    sky_delta = f"硬件 {round(total_skyworth_hardware_profit/10000,1)}万  |  续费 {round(total_skyworth_renew_profit/10000,1)}万"
-    you_delta = f"硬件 {round(total_youduo_hardware_profit/10000,1)}万  |  续费 {round(total_youduo_renew_profit/10000,1)}万"
+    # --- 颜色常量 ---
+    C_BG = "#F5F6FA"
+    C_HEADER = "#2C3E50"
+    C_BLUE = "#4A90D9"
+    C_GREEN = "#27AE60"
+    C_ORANGE = "#F39C12"
+    C_PURPLE = "#9B59B6"
+    C_RED = "#E74C3C"
+    C_WHITE = "#FFFFFF"
+    C_LIGHT_GRAY = "#F0F2F5"
+    C_TEXT = "#333333"
+    C_TEXT_LIGHT = "#888888"
+    C_BORDER = "#E0E0E0"
 
-    sku_table_rows = ''.join(
-        f'<tr><td><b>{s}</b></td>'
-        + ''.join(f'<td>{sku_base_config[s][k]}</td>' for k in ['default_extra_remote','default_light_gun','default_vip_month','default_vip_year','default_parent_card','default_nfc_full','default_nfc_ssr'])
-        + '</tr>'
-        for s in sku_list
-    )
+    tot_color = C_GREEN if total_profit >= 0 else C_RED
 
-    ch_rows = ''.join(
-        f'<div style="padding:9px 16px;border-bottom:1px solid #f0f0f0;background:{"#f0f8ff" if i%2==0 else "white"}"><b>{ch}</b>：当前费率 {channel_rate_config[ch]}%  |  销量 {channel_volume_dict[ch]:,} 台</div>'
-        for i, ch in enumerate(all_ch)
-    )
+    # --- 图片尺寸 ---
+    IMG_W = 9.0   # 英寸（手机宽度友好）
+    IMG_H = 22.0  # 英寸（长图）
+    DPI = 200
 
-    param_rows = ''.join(
-        f'<div style="padding:9px 16px;border-bottom:1px solid #f0f0f0;background:{"#fff0f0" if i%2==0 else "white"}"><b>{n}</b>：{v}</div>'
-        for i, (n, v) in enumerate([
-            ("续费年卡价格", f"¥{renew_vip_year_price}"),
-            ("续费月卡价格", f"¥{renew_vip_month_price}"),
-            ("会员续费率", f"{renew_rate}%"),
-            ("年卡续费占比", f"{year_card_renew_ratio}%"),
-            ("单台版权费", f"¥{royalty_fee}"),
-            ("创维分成比例", f"{vip_split_rate_pct}%"),
-            ("折价计提比例", f"{vip_discount_rate_pct}%"),
-            ("基础硬件成本", f"¥{base_hardware_cost}")
+    fig, ax = plt.subplots(figsize=(IMG_W, IMG_H), dpi=DPI)
+    fig.patch.set_facecolor(C_BG)
+    ax.set_xlim(0, IMG_W)
+    ax.set_ylim(0, IMG_H)
+    ax.axis("off")
+
+    y = IMG_H  # 从顶部开始向下绘制
+
+    # ========== 辅助函数 ==========
+    def draw_rounded_rect(ax, x, y_bottom, w, h, color, radius=0.15):
+        rect = FancyBboxPatch((x, y_bottom), w, h,
+                              boxstyle=f"round,pad={radius}",
+                              facecolor=color, edgecolor="none", zorder=1)
+        ax.add_patch(rect)
+
+    def draw_rect(ax, x, y_bottom, w, h, color):
+        rect = Rectangle((x, y_bottom), w, h, facecolor=color, edgecolor="none", zorder=1)
+        ax.add_patch(rect)
+
+    def draw_section_title(ax, y_top, title, bg_color, font_b):
+        h = 0.55
+        y_b = y_top - h
+        draw_rounded_rect(ax, 0.3, y_b, IMG_W - 0.6, h, bg_color, radius=0.12)
+        ax.text(IMG_W / 2, y_b + h / 2, title, ha="center", va="center",
+                fontproperties=font_b, fontsize=14, color=C_WHITE, zorder=5)
+        return y_b
+
+    def draw_table(ax, y_top, headers, rows, font_b, font_r, col_widths=None):
+        n_cols = len(headers)
+        table_w = IMG_W - 0.8
+        x_start = 0.4
+        if col_widths is None:
+            col_widths = [table_w / n_cols] * n_cols
+        row_h = 0.48
+        header_h = 0.52
+
+        # 表头
+        y_b = y_top - header_h
+        draw_rect(ax, x_start, y_b, table_w, header_h, "#E8ECF0")
+        cx = x_start
+        for i, hdr in enumerate(headers):
+            ax.text(cx + col_widths[i] / 2, y_b + header_h / 2, hdr,
+                    ha="center", va="center", fontproperties=font_b, fontsize=10, color="#555555", zorder=5)
+            cx += col_widths[i]
+        y_cur = y_b
+
+        # 数据行
+        for r_idx, row in enumerate(rows):
+            y_cur -= row_h
+            bg = C_WHITE if r_idx % 2 == 0 else C_LIGHT_GRAY
+            draw_rect(ax, x_start, y_cur, table_w, row_h, bg)
+            cx = x_start
+            for i, cell in enumerate(row):
+                ax.text(cx + col_widths[i] / 2, y_cur + row_h / 2, str(cell),
+                        ha="center", va="center", fontproperties=font_r, fontsize=10, color=C_TEXT, zorder=5)
+                cx += col_widths[i]
+            # 底部分割线
+            ax.plot([x_start, x_start + table_w], [y_cur, y_cur], color=C_BORDER, linewidth=0.5, zorder=3)
+
+        return y_cur
+
+    def draw_kv_row(ax, y_top, label, value, font_b, font_r, bg=C_WHITE, value_color=C_TEXT, value_size=12):
+        h = 0.50
+        y_b = y_top - h
+        draw_rect(ax, 0.4, y_b, IMG_W - 0.8, h, bg)
+        ax.text(0.65, y_b + h / 2, label, ha="left", va="center",
+                fontproperties=font_r, fontsize=11, color=C_TEXT, zorder=5)
+        ax.text(IMG_W - 0.65, y_b + h / 2, value, ha="right", va="center",
+                fontproperties=font_b, fontsize=value_size, color=value_color, zorder=5)
+        ax.plot([0.4, IMG_W - 0.4], [y_b, y_b], color=C_BORDER, linewidth=0.4, zorder=3)
+        return y_b
+
+    # ========== 1. 头部 ==========
+    header_h = 1.8
+    y -= header_h
+    draw_rect(ax, 0, y, IMG_W, header_h, C_HEADER)
+    ax.text(IMG_W / 2, y + header_h * 0.65, f"YOUDOO BOX 售价测算方案（{scheme_name}版）",
+            ha="center", va="center", fontproperties=font_bold, fontsize=20, color=C_WHITE, zorder=5)
+    ax.text(IMG_W / 2, y + header_h * 0.30,
+            f"生成时间：{now}   |   售价模式：{price_mode}   |   成本阶段：{use_channel_stage}",
+            ha="center", va="center", fontproperties=font_regular, fontsize=10, color="#AABBCC", zorder=5)
+    y -= 0.3
+
+    # ========== 2. 核心指标 ==========
+    y_sec = draw_section_title(ax, y, "📊  核心指标", C_BLUE, font_bold)
+    y = y_sec - 0.08
+
+    kv_items = [
+        ("全渠道总销售额", f"¥{round(total_revenue/10000,1)} 万元", C_TEXT),
+        ("全渠道总销量", f"{total_sales_volume:,} 台", C_TEXT),
+        ("单台均价", f"¥{round(avg_price_per,0)}", C_TEXT),
+        ("渠道综合成本", f"¥{round(total_channel_cost/10000,1)} 万元", C_TEXT),
+        ("综合费率", f"{round(avg_channel_rate,2)}%", C_TEXT),
+        ("产品总毛利", f"¥{round(total_profit/10000,1)} 万元", tot_color),
+        ("综合毛利率", f"{total_margin_rate}%", tot_color),
+    ]
+    for i, (label, value, vc) in enumerate(kv_items):
+        bg = C_WHITE if i % 2 == 0 else C_LIGHT_GRAY
+        y = draw_kv_row(ax, y, label, value, font_bold, font_regular, bg=bg, value_color=vc, value_size=13)
+    y -= 0.35
+
+    # ========== 3. 套装官方定价表 ==========
+    y_sec = draw_section_title(ax, y, "📦  套装官方定价表", C_GREEN, font_bold)
+    y = y_sec - 0.08
+
+    price_headers = ["SKU版本", "官方指导价", "大促价"]
+    price_rows = [
+        ["标准版", f"¥{std_guide_price}", f"¥{std_promo_price}"],
+        ["家庭版", f"¥{fam_guide_price}", f"¥{fam_promo_price}"],
+        ["豪华版", f"¥{lux_guide_price}", f"¥{lux_promo_price}"],
+    ]
+    tw = IMG_W - 0.8
+    y = draw_table(ax, y, price_headers, price_rows, font_bold, font_regular,
+                   col_widths=[tw * 0.34, tw * 0.33, tw * 0.33])
+    y -= 0.35
+
+    # ========== 4. 各SKU详细配置方案 ==========
+    y_sec = draw_section_title(ax, y, "🎁  各SKU详细配置方案", C_ORANGE, font_bold)
+    y = y_sec - 0.08
+
+    sku_headers = ["SKU", "遥控器", "光枪", "月卡", "年卡", "家长卡", "NFC全套", "NFC SSR"]
+    sku_rows = []
+    for s in sku_list:
+        cfg = sku_base_config[s]
+        sku_rows.append([
+            s,
+            str(cfg["default_extra_remote"]),
+            str(cfg["default_light_gun"]),
+            str(cfg["default_vip_month"]),
+            str(cfg["default_vip_year"]),
+            str(cfg["default_parent_card"]),
+            str(cfg["default_nfc_full"]),
+            str(cfg["default_nfc_ssr"]),
         ])
-    )
+    cw8 = [tw * 0.14, tw * 0.12, tw * 0.10, tw * 0.10, tw * 0.10, tw * 0.14, tw * 0.15, tw * 0.15]
+    y = draw_table(ax, y, sku_headers, sku_rows, font_bold, font_regular, col_widths=cw8)
+    y -= 0.35
 
-    html = f"""<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<style>
-*{{font-family:'PingFang SC','Microsoft YaHei',Arial,sans-serif;box-sizing:border-box;margin:0;padding:0}}
-body{{background:#F8F9FA;padding:0;color:#333}}
-.header{{background:#2C3E50;color:white;padding:18px 24px;text-align:center}}
-.header h1{{font-size:19px;margin-bottom:5px}}
-.header p{{font-size:12px;color:#ccc;margin:3px 0 0}}
-.section{{margin:14px;background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.1)}}
-.sec-title{{padding:9px 16px;color:white;font-size:13px;font-weight:bold}}
-.blue{{background:#4A90D9}} .green{{background:#27AE60}} .orange{{background:#F39C12}}
-.purple{{background:#9B59B6}} .red{{background:#E74C3C}}
-.metric-card{{padding:0}}
-.mv-row{{display:flex;align-items:center;padding:9px 16px;border-bottom:1px solid #eee}}
-.mv-label{{flex:1;font-size:13px}} .mv-value{{font-size:17px;font-weight:bold;margin:0 14px}} .mv-delta{{font-size:11px;color:#888}}
-.info-row{{padding:9px 16px;border-bottom:1px solid #f0f0f0;font-size:13px}} .info-row:nth-child(even){{background:#fafafa}}
-table{{width:100%;border-collapse:collapse;font-size:12px}} th{{background:rgba(0,0,0,0.04);padding:8px 10px;text-align:center;color:#555;font-weight:bold}} td{{padding:7px 10px;text-align:center;border-bottom:1px solid #f0f0f0}} tr:last-child td{{border-bottom:none}}
-.footer{{text-align:center;color:#bbb;font-size:11px;padding:14px;border-top:1px solid #eee;margin-top:14px}}
-</style></head><body>
-<div class="header">
-    <h1>🎮 YOUDOO BOX 毛利测算方案报告</h1>
-    <p>生成时间：{now}  |  售价模式：{price_mode}  |  成本阶段：{use_channel_stage}</p>
-</div>
+    # ========== 5. 会员价格方案 ==========
+    y_sec = draw_section_title(ax, y, "👑  会员价格方案", C_PURPLE, font_bold)
+    y = y_sec - 0.08
 
-<div class="section" style="margin:14px;">
-    <div class="sec-title blue">📊 核心指标</div>
-    <div class="info-row" style="background:#f5f5f5"><b>全渠道总销售额</b>：<b>¥{round(total_revenue/10000,1)} 万元</b></div>
-    <div class="info-row"><b>全渠道总销量</b>：{total_sales_volume:,} 台  |  单台均价 ¥{round(avg_price_per,0)} 元</div>
-    <div class="info-row" style="background:#f5f5f5"><b>渠道综合成本</b>：¥{round(total_channel_cost/10000,1)} 万元  |  综合费率 {round(avg_channel_rate,2)}%</div>
-    <div class="mv-row"><span class="mv-label">创维数字总毛利</span><span class="mv-value" style="color:{sky_color}">¥{round(total_skyworth_profit/10000,1)} 万元</span><span class="mv-delta">{sky_delta}</span></div>
-    <div class="mv-row" style="background:#f0f8ff"><span class="mv-label">创想悦动总毛利</span><span class="mv-value" style="color:{you_color}">¥{round(total_youduo_profit/10000,1)} 万元</span><span class="mv-delta">{you_delta}</span></div>
-    <div class="mv-row"><span class="mv-label">产品总毛利</span><span class="mv-value" style="color:{tot_color}">¥{round(total_profit/10000,1)} 万元</span><span class="mv-delta">综合毛利率 {total_margin_rate}%</span></div>
-</div>
+    vip_headers = ["会员类型", "价格"]
+    vip_rows = [
+        ["VIP 月卡", f"¥{renew_vip_month_price} / 月"],
+        ["VIP 年卡", f"¥{renew_vip_year_price} / 年"],
+    ]
+    y = draw_table(ax, y, vip_headers, vip_rows, font_bold, font_regular,
+                   col_widths=[tw * 0.5, tw * 0.5])
+    y -= 0.35
 
-<div class="section" style="margin:14px;">
-    <div class="sec-title green">📦 套装价格</div>
-    <table><tr><th>SKU版本</th><th>官方指导价</th><th>大促价</th></tr>
-    <tr><td>标准版</td><td>¥{std_guide_price}</td><td>¥{std_promo_price}</td></tr>
-    <tr><td>家庭版</td><td>¥{fam_guide_price}</td><td>¥{fam_promo_price}</td></tr>
-    <tr><td>豪华版</td><td>¥{lux_guide_price}</td><td>¥{lux_promo_price}</td></tr>
-    </table>
-</div>
+    # ========== 6. 详细销售参数设定 ==========
+    y_sec = draw_section_title(ax, y, "⚙️  详细销售参数设定", C_RED, font_bold)
+    y = y_sec - 0.08
 
-<div class="section" style="margin:14px;">
-    <div class="sec-title orange">🎁 各SKU赠品/配件配置</div>
-    <table><tr><th>SKU</th><th>遥控器</th><th>光枪</th><th>VIP月卡</th><th>VIP年卡</th><th>家长卡</th><th>NFC全套</th><th>NFC SSR</th></tr>
-    {sku_table_rows}
-    </table>
-</div>
+    # 渠道参数小标题
+    sub_h = 0.42
+    y -= sub_h
+    draw_rect(ax, 0.4, y, IMG_W - 0.8, sub_h, "#EAF0F8")
+    ax.text(0.65, y + sub_h / 2, "▸ 渠道参数", ha="left", va="center",
+            fontproperties=font_bold, fontsize=11, color=C_BLUE, zorder=5)
 
-<div class="section" style="margin:14px;">
-    <div class="sec-title purple">💰 渠道参数</div>
-    {ch_rows}
-</div>
+    ch_items = [
+        ("京东销量占比", f"{jd_ratio}%"),
+        ("天猫销量占比", f"{tmall_ratio}%"),
+        ("抖音销量占比", f"{douyin_ratio}%"),
+        ("线下销量占比", f"{offline_ratio}%"),
+    ]
+    for i, (label, value) in enumerate(ch_items):
+        bg = C_WHITE if i % 2 == 0 else C_LIGHT_GRAY
+        y = draw_kv_row(ax, y, label, value, font_bold, font_regular, bg=bg)
+    y -= 0.10
 
-<div class="section" style="margin:14px;">
-    <div class="sec-title red">📋 会员·版权金·其他参数</div>
-    {param_rows}
-</div>
+    # 成本参数小标题
+    y -= sub_h
+    draw_rect(ax, 0.4, y, IMG_W - 0.8, sub_h, "#FFF3E0")
+    ax.text(0.65, y + sub_h / 2, "▸ 成本参数", ha="left", va="center",
+            fontproperties=font_bold, fontsize=11, color=C_ORANGE, zorder=5)
 
-<div class="footer">YOUDOO BOX 毛利测算模型 V6.7  |  自动生成</div>
-</body></html>"""
+    cost_items = [
+        ("基础硬件成本", f"¥{base_hardware_cost}"),
+        ("单台版权费", f"¥{royalty_fee}"),
+    ]
+    for i, (label, value) in enumerate(cost_items):
+        bg = C_WHITE if i % 2 == 0 else C_LIGHT_GRAY
+        y = draw_kv_row(ax, y, label, value, font_bold, font_regular, bg=bg)
+    y -= 0.10
 
-    buf = io.BytesIO(html.encode("utf-8"))
-    st.success("✅ 方案信息图已生成！可预览也可下载保存。")
+    # 会员参数小标题
+    y -= sub_h
+    draw_rect(ax, 0.4, y, IMG_W - 0.8, sub_h, "#F3E5F5")
+    ax.text(0.65, y + sub_h / 2, "▸ 会员参数", ha="left", va="center",
+            fontproperties=font_bold, fontsize=11, color=C_PURPLE, zorder=5)
+
+    member_items = [
+        ("会员续费率", f"{renew_rate}%"),
+        ("年卡续费占比", f"{year_card_renew_ratio}%"),
+        ("创维分成比例", f"{vip_split_rate_pct}%"),
+    ]
+    for i, (label, value) in enumerate(member_items):
+        bg = C_WHITE if i % 2 == 0 else C_LIGHT_GRAY
+        y = draw_kv_row(ax, y, label, value, font_bold, font_regular, bg=bg)
+    y -= 0.45
+
+    # ========== 底部 ==========
+    ax.text(IMG_W / 2, y, "YOUDOO BOX 毛利测算模型 V6.7  |  自动生成",
+            ha="center", va="center", fontproperties=font_regular, fontsize=9, color="#BBBBBB", zorder=5)
+
+    # --- 裁剪画布到实际内容高度 ---
+    actual_bottom = max(y - 0.5, 0)
+    ax.set_ylim(actual_bottom, IMG_H)
+    fig.set_size_inches(IMG_W, IMG_H - actual_bottom)
+
+    # --- 输出 PNG ---
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight", pad_inches=0.15, facecolor=C_BG)
+    plt.close(fig)
+    buf.seek(0)
+
+    st.success("✅ 方案信息图已生成！长按图片可保存到手机相册。")
+    st.image(buf, use_container_width=True)
+    buf.seek(0)
     st.download_button(
-        label="📥 下载 HTML 方案文件",
+        label="📥 下载 PNG 方案图片",
         data=buf,
-        file_name=f"YOUDOO_方案_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
-        mime="text/html",
+        file_name=f"YOUDOO_方案_{scheme_name}版_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+        mime="image/png",
         use_container_width=True
     )
-    st.subheader("📋 方案预览")
-    st.components.v1.html(html, height=900, scrolling=True)
