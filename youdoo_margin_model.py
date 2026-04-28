@@ -328,6 +328,18 @@ vip_discount_rate_pct = st.sidebar.slider("赠送会员折价计提比例", 0, 1
 vip_discount_rate = vip_discount_rate_pct / 100
 base_hardware_cost = st.sidebar.number_input("基础硬件成本（含标配/运输/售后，元）", value=984)
 
+# 第八区：运营收入渠道返佣测算
+st.sidebar.divider()
+st.sidebar.subheader("📣 运营收入渠道返佣测算")
+operation_commission_enabled = st.sidebar.checkbox("激活运营收入返佣模式", value=False)
+st.sidebar.caption("仅按线下渠道会员续费收入计算返佣成本，成本由创维/创想各承担50%")
+operation_commission_rate_pct = st.sidebar.slider("线下渠道运营返佣比例", 0, 50, 10, format="%d%%")
+operation_commission_rate = operation_commission_rate_pct / 100
+commission_growth_max_pct = st.sidebar.slider("销量增长敏感性测试上限", 10, 200, 100, step=10, format="%d%%")
+commission_growth_step_pct = st.sidebar.selectbox("销量增长测试步长", [5, 10, 20], index=1)
+commission_rate_max_pct = st.sidebar.slider("返佣比例敏感性测试上限", 10, 50, 30, step=5, format="%d%%")
+commission_rate_step_pct = st.sidebar.selectbox("返佣比例测试步长", [5, 10], index=0)
+
 # -------------------------- 3. 核心财务计算（强关联修正版） --------------------------
 sku_calc_detail = {}
 # 硬件销售基础数据
@@ -442,12 +454,20 @@ single_user_year_renew_revenue = (renew_rate / 100) * (
 )
 # 累计总续费收入（和总销量完全线性相关）
 total_renew_revenue = total_sales_volume * single_user_year_renew_revenue * renew_years
+# 线下渠道续费收入作为运营返佣收入基数
+offline_renew_revenue = offline_total_volume * single_user_year_renew_revenue * renew_years
+operation_commission_cost = offline_renew_revenue * operation_commission_rate if operation_commission_enabled else 0
+skyworth_commission_cost = operation_commission_cost * 0.5
+youduo_commission_cost = operation_commission_cost * 0.5
 # 双主体分账（严格按规则）
 total_skyworth_renew_profit = total_renew_revenue * vip_split_rate
 total_youduo_renew_profit = total_renew_revenue * (1 - vip_split_rate)
-# 最终总毛利（硬件+续费）
-total_skyworth_profit = total_skyworth_hardware_profit + total_skyworth_renew_profit
-total_youduo_profit = total_youduo_hardware_profit + total_youduo_renew_profit
+# 最终总毛利（硬件+续费-线下运营返佣成本）
+total_skyworth_profit_before_commission = total_skyworth_hardware_profit + total_skyworth_renew_profit
+total_youduo_profit_before_commission = total_youduo_hardware_profit + total_youduo_renew_profit
+total_profit_before_commission = total_skyworth_profit_before_commission + total_youduo_profit_before_commission
+total_skyworth_profit = total_skyworth_profit_before_commission - skyworth_commission_cost
+total_youduo_profit = total_youduo_profit_before_commission - youduo_commission_cost
 total_profit = total_skyworth_profit + total_youduo_profit
 
 # 计算加权平均单台数据
@@ -514,30 +534,33 @@ with col2:
     st.metric("渠道综合成本", f"{round(total_channel_cost/10000,2)} 万元", f"单台平均 {round(avg_channel_cost_per,2)} 元")
 with col3:
     skyworth_color = "green" if total_skyworth_profit >= 0 else "red"
+    skyworth_commission_note = f" | 返佣成本：{round(skyworth_commission_cost/10000,2)}万" if operation_commission_enabled else ""
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
         <p style="margin:0; font-size:14px; color:#555;">创维数字总毛利</p>
         <h3 style="margin:5px 0; color:{skyworth_color};">{round(total_skyworth_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">硬件：{round(total_skyworth_hardware_profit/10000,2)}万 | 续费：{round(total_skyworth_renew_profit/10000,2)}万</p>
+        <p style="margin:0; font-size:12px;">硬件：{round(total_skyworth_hardware_profit/10000,2)}万 | 续费：{round(total_skyworth_renew_profit/10000,2)}万{skyworth_commission_note}</p>
     </div>
     """, unsafe_allow_html=True)
 with col4:
     youduo_color = "green" if total_youduo_profit >= 0 else "red"
+    youduo_commission_note = f" | 返佣成本：{round(youduo_commission_cost/10000,2)}万" if operation_commission_enabled else ""
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
         <p style="margin:0; font-size:14px; color:#555;">创想悦动总毛利</p>
         <h3 style="margin:5px 0; color:{youduo_color};">{round(total_youduo_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">硬件：{round(total_youduo_hardware_profit/10000,2)}万 | 续费：{round(total_youduo_renew_profit/10000,2)}万</p>
+        <p style="margin:0; font-size:12px;">硬件：{round(total_youduo_hardware_profit/10000,2)}万 | 续费：{round(total_youduo_renew_profit/10000,2)}万{youduo_commission_note}</p>
     </div>
     """, unsafe_allow_html=True)
 with col5:
     total_color = "green" if total_profit >= 0 else "red"
     total_margin_rate = round(total_profit / (total_revenue + total_renew_revenue) * 100, 2) if (total_revenue + total_renew_revenue) >0 else 0
+    total_commission_note = f" | 返佣成本 {round(operation_commission_cost/10000,2)}万" if operation_commission_enabled else ""
     st.markdown(f"""
     <div style="padding: 10px; border-radius: 5px; border: 1px solid #e6e6e6;">
         <p style="margin:0; font-size:14px; color:#555;">产品总毛利</p>
         <h3 style="margin:5px 0; color:{total_color};">{round(total_profit/10000,2)} 万元</h3>
-        <p style="margin:0; font-size:12px;">综合毛利率 {total_margin_rate}%</p>
+        <p style="margin:0; font-size:12px;">综合毛利率 {total_margin_rate}%{total_commission_note}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -675,6 +698,170 @@ with col_detail2:
         ]
     })
     st.dataframe(youduo_detail_df, use_container_width=True, hide_index=True)
+
+# 运营收入返佣优化决策模块
+st.divider()
+st.subheader("📣 线下渠道运营返佣优化决策分析")
+st.caption("返佣基数仅为线下渠道会员续费收入；返佣按收入比例计算；成本由创维数字/创想悦动各承担50%；返佣与销量增长无固定映射，仅做敏感性分析。")
+
+base_profit_no_commission = total_profit_before_commission
+base_total_income = total_revenue + total_renew_revenue
+base_margin_no_commission = base_profit_no_commission / base_total_income * 100 if base_total_income > 0 else 0
+
+if operation_commission_enabled:
+    c_op1, c_op2, c_op3, c_op4, c_op5 = st.columns(5)
+    with c_op1:
+        st.metric("当前返佣比例", f"{operation_commission_rate_pct}%", "仅线下续费收入")
+    with c_op2:
+        st.metric("线下续费收入基数", f"{round(offline_renew_revenue/10000,2)} 万元", f"线下销量 {offline_total_volume:,} 台")
+    with c_op3:
+        st.metric("运营返佣成本", f"{round(operation_commission_cost/10000,2)} 万元", "按收入比例")
+    with c_op4:
+        st.metric("两家公司各承担", f"{round(skyworth_commission_cost/10000,2)} 万元", "50% / 50%")
+    with c_op5:
+        st.metric("返佣后利润变化", f"{round((total_profit-base_profit_no_commission)/10000,2)} 万元", f"毛利率 {round(total_margin_rate,2)}%")
+else:
+    st.info("当前未激活运营收入返佣模式。下方仍提供敏感性分析，用于评估不同返佣比例和销量增长组合下的利润变化。")
+
+growth_rates = np.arange(0, commission_growth_max_pct + commission_growth_step_pct, commission_growth_step_pct) / 100
+commission_rates = np.arange(0, commission_rate_max_pct + commission_rate_step_pct, commission_rate_step_pct) / 100
+commission_sensitivity_data = []
+
+for growth_rate in growth_rates:
+    multiplier = 1 + growth_rate
+    simulated_total_volume = int(total_sales_volume * multiplier)
+    simulated_offline_volume = int(offline_total_volume * multiplier)
+    simulated_revenue = total_revenue * multiplier
+    simulated_renew_revenue = total_renew_revenue * multiplier
+    simulated_offline_renew_revenue = offline_renew_revenue * multiplier
+    simulated_sky_hw_profit = total_skyworth_hardware_profit * multiplier
+    simulated_you_hw_profit = total_youduo_hardware_profit * multiplier
+    simulated_sky_renew_profit = simulated_renew_revenue * vip_split_rate
+    simulated_you_renew_profit = simulated_renew_revenue * (1 - vip_split_rate)
+    simulated_no_commission_profit = simulated_sky_hw_profit + simulated_you_hw_profit + simulated_renew_revenue
+
+    for rate in commission_rates:
+        simulated_commission_cost = simulated_offline_renew_revenue * rate
+        simulated_sky_profit = simulated_sky_hw_profit + simulated_sky_renew_profit - simulated_commission_cost * 0.5
+        simulated_you_profit = simulated_you_hw_profit + simulated_you_renew_profit - simulated_commission_cost * 0.5
+        simulated_total_profit = simulated_sky_profit + simulated_you_profit
+        simulated_total_income = simulated_revenue + simulated_renew_revenue
+        commission_sensitivity_data.append({
+            "销量增长率": f"{int(round(growth_rate * 100))}%",
+            "销量增长率数值": growth_rate * 100,
+            "返佣比例": f"{int(round(rate * 100))}%",
+            "返佣比例数值": rate * 100,
+            "模拟销量": simulated_total_volume,
+            "线下模拟销量": simulated_offline_volume,
+            "线下续费收入基数（万元）": simulated_offline_renew_revenue / 10000,
+            "返佣成本（万元）": simulated_commission_cost / 10000,
+            "创维承担成本（万元）": simulated_commission_cost * 0.5 / 10000,
+            "创想承担成本（万元）": simulated_commission_cost * 0.5 / 10000,
+            "创维总毛利（万元）": simulated_sky_profit / 10000,
+            "创想总毛利（万元）": simulated_you_profit / 10000,
+            "产品总毛利（万元）": simulated_total_profit / 10000,
+            "无返佣产品总毛利（万元）": simulated_no_commission_profit / 10000,
+            "较当前无返佣利润变化（万元）": (simulated_total_profit - base_profit_no_commission) / 10000,
+            "综合毛利率（%）": simulated_total_profit / simulated_total_income * 100 if simulated_total_income > 0 else 0,
+        })
+
+commission_sensitivity_df = pd.DataFrame(commission_sensitivity_data)
+selected_rate_df = commission_sensitivity_df[commission_sensitivity_df["返佣比例数值"] == operation_commission_rate_pct]
+break_even_df = selected_rate_df[selected_rate_df["产品总毛利（万元）"] >= base_profit_no_commission / 10000]
+if not break_even_df.empty:
+    break_even_growth = break_even_df.sort_values("销量增长率数值").iloc[0]["销量增长率数值"]
+    break_even_text = f"当前返佣比例 {operation_commission_rate_pct}% 下，销量至少增长约 {round(break_even_growth,1)}%，产品总毛利可不低于当前无返佣方案。"
+else:
+    break_even_text = f"当前返佣比例 {operation_commission_rate_pct}% 下，在测试范围内产品总毛利仍未超过当前无返佣方案。"
+
+best_profit_row = commission_sensitivity_df.sort_values("产品总毛利（万元）", ascending=False).iloc[0]
+max_affordable_rows = []
+for growth_rate in growth_rates:
+    sub = commission_sensitivity_df[
+        (commission_sensitivity_df["销量增长率数值"] == growth_rate * 100)
+        & (commission_sensitivity_df["产品总毛利（万元）"] >= base_profit_no_commission / 10000)
+    ]
+    if sub.empty:
+        max_affordable_rate = None
+    else:
+        max_affordable_rate = sub["返佣比例数值"].max()
+    max_affordable_rows.append({
+        "销量增长率": f"{int(round(growth_rate * 100))}%",
+        "可承受最高返佣比例": "无法覆盖" if max_affordable_rate is None else f"{int(round(max_affordable_rate))}%"
+    })
+max_affordable_df = pd.DataFrame(max_affordable_rows)
+
+st.markdown(f"""
+<div style="background-color:#fff8e6;padding:14px;border-radius:8px;border-left:5px solid #f39c12;margin-bottom:16px;">
+    <b>决策提示：</b>{break_even_text}<br>
+    <span style="color:#666;font-size:13px;">由于返佣比例与销量增长没有明确映射，单纯财务最优返佣比例通常趋近于0%；本模块重点用于判断不同销量增长假设下的返佣承受能力。</span>
+</div>
+""", unsafe_allow_html=True)
+
+c_dec1, c_dec2, c_dec3 = st.columns(3)
+with c_dec1:
+    st.metric("当前无返佣基准利润", f"{round(base_profit_no_commission/10000,2)} 万元", f"基准毛利率 {round(base_margin_no_commission,2)}%")
+with c_dec2:
+    st.metric("测试范围内最高利润", f"{round(best_profit_row['产品总毛利（万元）'],2)} 万元", f"增长{best_profit_row['销量增长率']} / 返佣{best_profit_row['返佣比例']}")
+with c_dec3:
+    best_delta = best_profit_row["产品总毛利（万元）"] - base_profit_no_commission / 10000
+    st.metric("最高利润较基准变化", f"{round(best_delta,2)} 万元", "含销量增长假设")
+
+col_commission_chart1, col_commission_chart2 = st.columns(2)
+with col_commission_chart1:
+    selected_rate_line_df = selected_rate_df.sort_values("销量增长率数值")
+    fig_commission_line = go.Figure()
+    fig_commission_line.add_trace(go.Scatter(
+        x=selected_rate_line_df["销量增长率数值"],
+        y=selected_rate_line_df["产品总毛利（万元）"],
+        mode="lines+markers",
+        name=f"返佣{operation_commission_rate_pct}%后产品总毛利"
+    ))
+    fig_commission_line.add_trace(go.Scatter(
+        x=selected_rate_line_df["销量增长率数值"],
+        y=selected_rate_line_df["无返佣产品总毛利（万元）"],
+        mode="lines+markers",
+        name="同销量下无返佣产品总毛利",
+        line=dict(dash="dot")
+    ))
+    fig_commission_line.add_hline(y=base_profit_no_commission/10000, line_dash="dash", line_color="red",
+                                  annotation_text="当前无返佣基准利润")
+    fig_commission_line.update_layout(
+        title=f"当前返佣比例 {operation_commission_rate_pct}%：销量增长-利润曲线",
+        xaxis_title="销量增长率（%）",
+        yaxis_title="产品总毛利（万元）",
+        height=430
+    )
+    st.plotly_chart(fig_commission_line, use_container_width=True)
+
+with col_commission_chart2:
+    fig_commission_heatmap = go.Figure(data=go.Heatmap(
+        x=commission_sensitivity_df["返佣比例数值"],
+        y=commission_sensitivity_df["销量增长率数值"],
+        z=commission_sensitivity_df["较当前无返佣利润变化（万元）"],
+        colorscale="RdYlGn",
+        colorbar=dict(title="较基准变化（万元）")
+    ))
+    fig_commission_heatmap.update_layout(
+        title="返佣比例 × 销量增长率 利润变化热力图",
+        xaxis_title="返佣比例（%）",
+        yaxis_title="销量增长率（%）",
+        height=430
+    )
+    st.plotly_chart(fig_commission_heatmap, use_container_width=True)
+
+col_commission_table1, col_commission_table2 = st.columns([1.2, 1])
+with col_commission_table1:
+    st.subheader("📋 当前返佣比例下销量增长敏感性表")
+    display_selected_rate_df = selected_rate_line_df[[
+        "销量增长率", "模拟销量", "线下续费收入基数（万元）", "返佣成本（万元）",
+        "创维总毛利（万元）", "创想总毛利（万元）", "产品总毛利（万元）",
+        "较当前无返佣利润变化（万元）", "综合毛利率（%）"
+    ]].copy()
+    st.dataframe(display_selected_rate_df.round(2), use_container_width=True, hide_index=True)
+with col_commission_table2:
+    st.subheader("🎯 各销量增长下可承受最高返佣")
+    st.dataframe(max_affordable_df, use_container_width=True, hide_index=True)
 
 # 【修正3】敏感性分析（强化销量-毛利的关联展示）
 st.divider()
